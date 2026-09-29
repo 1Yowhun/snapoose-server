@@ -2,6 +2,7 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { firestoreFactory } from './firestore/firestore.factory.js';
+import { R2_CLIENT, r2Factory } from '../cloudflare/r2.factory.js';
 
 @Global()
 @Module({
@@ -11,7 +12,12 @@ import { firestoreFactory } from './firestore/firestore.factory.js';
       inject: [ConfigService],
       useFactory: firestoreFactory,
     },
+    {
+      provide: R2_CLIENT,
+      inject: [ConfigService],
+      useFactory: r2Factory,
+    },
   ],
-  exports: ['FIRESTORE'],
+  exports: ['FIRESTORE', 'R2_CLIENT'],
 })
-export class FireStoreModule {}
+export class ProviderModule {}
