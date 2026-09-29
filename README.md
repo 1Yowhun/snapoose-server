@@ -23,7 +23,9 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Snapoose Pro Backend API built with NestJS, Cloud Firestore, and Cloudflare R2.
+
+📖 **[Lihat Dokumentasi Lengkap API (API.md)](./API.md)**
 
 ## Project setup
 
