@@ -1,6 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { AppService } from './app.service.js';
 import { AppLogger } from './common/logger.service.js';
+import { Public } from './common/decorators/public.decorator.js';
 
 @Controller()
 export class AppController {
@@ -9,11 +10,9 @@ export class AppController {
     private readonly logger: AppLogger,
   ) {}
 
+  @Public()
   @Get('/test')
   async getHello() {
-    return this.logger.log(
-      `GET /test - Response: test test bro`,
-      'App Controller',
-    );
+    return `hello world`;
   }
 }
