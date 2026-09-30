@@ -45,7 +45,7 @@ export class FrameRepository {
     const imageRefPath = await this.firestore
       .collection('frames')
       .where('frameType', '!=', 'CUSTOM')
-      .limit(15)
+      .limit(20)
       .get();
     return imageRefPath.docs.map((image) => image.data().imagePath);
   }
@@ -57,7 +57,7 @@ export class FrameRepository {
       .collection('frames')
       .where('frameType', '==', 'CUSTOM')
       .where('validFrom', '!=', null)
-      .limit(15)
+      .limit(20)
       .get();
 
     return imageRefPath.docs.map((data) => data.data());
