@@ -35,13 +35,6 @@ export class AuthService {
         updatedAt: new Date(),
       });
 
-      const accessToken = await this.jwt.signAsync({
-        id: user.id,
-        tenantId: user.tenantId,
-        name: user.name,
-        code: user.code,
-      });
-
       this.logger.log(`User berhasil dibuat`, 'UserService');
       return {
         user: {
@@ -50,7 +43,6 @@ export class AuthService {
           name: user.name,
           code: user.code,
         },
-        access_token: accessToken,
       };
     } catch (error) {
       this.logger.logError(
