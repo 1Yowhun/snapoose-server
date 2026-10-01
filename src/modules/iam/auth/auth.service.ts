@@ -20,20 +20,21 @@ export class AuthService {
     try {
       const tenantId =
         this.configService.getOrThrow<string>('DEFAULT_TENANT_ID');
-      const existing = await this.authRepository.findUser(tenantId, dto.name);
-      if (existing) {
-        throw new ConflictException(`Nama sudah terdaftar`);
-      }
+      const normalizedName = dto.name.trim().toLowerCase();
       const hashedPassword = await argon2.hash(dto.password);
 
-      const user = await this.authRepository.create(tenantId, {
+      const user = await this.authRepository.createUserWithUniqueName(
         tenantId,
-        code: 'USER',
-        name: dto.name,
-        password: hashedPassword,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+        normalizedName,
+        {
+          tenantId,
+          code: 'USER',
+          name: dto.name,
+          password: hashedPassword,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      );
 
       this.logger.log(`User berhasil dibuat`, 'UserService');
       return {

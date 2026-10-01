@@ -1,4 +1,4 @@
-import { Inject } from '@nestjs/common';
+import { ConflictException, Inject } from '@nestjs/common';
 import { Firestore } from 'firebase-admin/firestore';
 import { AppLogger } from '../../../common/logger.service.js';
 import { User } from '../../../entity/user.entity.js';
@@ -47,22 +47,35 @@ export class AuthRepository {
         : data.updatedAt,
     });
   }
-  async create(tenantId: string, userData: Partial<User>): Promise<User> {
-    const now = new Date();
-    const payload = {
-      ...userData,
-      createdAt: now,
-      updatedAt: now,
-    };
-    const docRef = await this.firestore
+  async createUserWithUniqueName(
+    tenantId: string,
+    normalizedName: string,
+    userData: Partial<User>,
+  ): Promise<User> {
+    const userRef = this.firestore
       .collection('tenants')
       .doc(tenantId)
-      .collection('users')
-      .add(payload);
+      .collection('users');
+
+    await this.firestore.runTransaction(async (tx) => {
+      const usernameDoc = await tx.get(
+        userRef.where('name', '==', normalizedName).limit(1),
+      );
+
+      if (!usernameDoc.empty) {
+        throw new ConflictException(`Nama sudah terdaftar`);
+      }
+
+      tx.set(userRef.doc(), {
+        ...userData,
+        normalizedName,
+        createdAt: new Date(),
+      });
+    });
 
     return new User({
-      id: docRef.id,
-      ...payload,
+      id: userRef.id,
+      ...userData,
     });
   }
 }
