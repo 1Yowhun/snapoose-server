@@ -372,8 +372,8 @@ Mengunggah custom frame khusus event/promosi yang memiliki masa berlaku tanggal 
 |---|---|---|---|
 | `frame` | `File` (Binary) | Ya | Ekstensi file: `.png`, `.jpg`, `.jpeg`. Maksimal: **5 MB** |
 | `name` | `string` | Ya | Nama frame |
-| `validFrom` | `string` | Tidak | Format ISO Date String (contoh: `2026-10-01T00:00:00.000Z`) |
-| `validUntil` | `string` | Tidak | Format ISO Date String (contoh: `2026-10-31T23:59:59.000Z`) |
+| `validFrom` | `string` | Ya | Format ISO Date String (contoh: `2026-10-01T00:00:00.000Z`) |
+| `validUntil` | `string` | Ya | Format ISO Date String (contoh: `2026-10-31T23:59:59.000Z`) |
 
 *(Catatan: `frameType` akan otomatis di-assign sebagai `"CUSTOM"`).*
 
@@ -485,7 +485,6 @@ Menambahkan voucher diskon baru untuk tenant.
 | `voucherCode` | `string` | Ya | Kode voucher (unik per promosi) |
 | `discountPercent`| `number` | Ya | Persentase diskon (contoh: `20` untuk 20%) |
 | `quota` | `integer` | Ya | Batas kuota pemakaian |
-| `usedCount` | `integer` | Ya | Jumlah yang telah digunakan (biasanya `0` saat buat baru) |
 | `validFrom` | `string` (Date) | Ya | Tanggal mulai berlaku (ISO 8601) |
 | `validUntil` | `string` (Date) | Ya | Tanggal kedaluwarsa (ISO 8601) |
 
