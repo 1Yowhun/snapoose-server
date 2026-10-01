@@ -6,6 +6,7 @@ import { CreateUserDto } from '../../../dto/user.dto.js';
 import { ConfigService } from '@nestjs/config';
 import { LoginDto } from '../../../dto/login.dto.js';
 import { AppLogger } from '../../../common/logger.service.js';
+import { generateId } from '../../../common/utils/generateCode.js';
 
 @Injectable()
 export class AuthService {
@@ -28,8 +29,8 @@ export class AuthService {
         normalizedName,
         {
           tenantId,
-          code: 'USER',
           name: dto.name,
+          code: `USER-${generateId()}`,
           password: hashedPassword,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -56,16 +57,21 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
+    const normalizedName = dto.name.trim().toLowerCase();
     try {
       const tenantId =
         this.configService.getOrThrow<string>('DEFAULT_TENANT_ID');
-      const user = await this.authRepository.findUser(tenantId, dto.name);
+      const user = await this.authRepository.findUser(tenantId, normalizedName);
       if (!user) {
-        throw new ConflictException(`Nama atau password salah`);
+        this.logger.warn('Login gagal, tidak ada nama', 'AuthService');
+        throw new ConflictException(`Nama tidak ada, silahakan register`);
       }
       const isPasswordValid = await argon2.verify(user.password, dto.password);
 
-      if (!isPasswordValid) throw new ConflictException(`Password salah`);
+      if (!isPasswordValid) {
+        this.logger.warn('Login gagal, password salah', 'AuthService');
+        throw new ConflictException(`Password salah`);
+      }
       const accessToken = await this.jwt.signAsync({
         sub: user.id,
         name: user.name,

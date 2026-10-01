@@ -36,7 +36,7 @@ export class AuthRepository {
     return new User({
       id: doc.id,
       tenantId: data.tenantId,
-      code: `USER`,
+      code: data.code,
       name: data.name,
       password: data.password,
       createdAt: data.createdAt?.toDate
