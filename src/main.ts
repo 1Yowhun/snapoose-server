@@ -15,6 +15,9 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  app.enableCors({
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
+  });
   app.setGlobalPrefix('/api/v1');
   await app.listen(process.env.PORT ?? 3000);
 }

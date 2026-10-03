@@ -8,6 +8,7 @@ import {
 import { FrameRepository } from './frame.repository.js';
 import { RequestUser } from '../../../entity/requestUser.entity.js';
 import { AppLogger } from '../../../common/logger.service.js';
+import { generateId } from '../../../common/utils/generateCode.js';
 
 @Injectable()
 export class FrameService {
@@ -36,7 +37,7 @@ export class FrameService {
       const payload = {
         ...data,
 
-        code: `FRM-${Date.now()}`,
+        code: `FRM-${generateId()}`,
         tenantId: user.tenantId,
         imagePath: url,
         isActive: true,
@@ -80,7 +81,7 @@ export class FrameService {
       const now = new Date();
       const payload = {
         ...data,
-        code: `FRM-${Date.now()}`,
+        code: `FRM-${generateId()}`,
         tenantId: user.tenantId,
         imagePath: url,
         frameType: 'CUSTOM',

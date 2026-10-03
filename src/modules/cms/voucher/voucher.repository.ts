@@ -45,7 +45,7 @@ export class VoucherRepository {
   async getAllVoucherList(): Promise<Voucher[]> {
     const snapshot = await this.firestore
       .collection('vouchers')
-      .limit(15)
+      .limit(20)
       .get();
 
     return snapshot.docs.map(

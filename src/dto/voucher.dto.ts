@@ -19,9 +19,6 @@ export class CreateVoucherDto {
   @IsInt({ message: 'Quota must be an integer' })
   quota: number;
 
-  @IsInt({ message: 'Used count must be an integer' })
-  usedCount: number;
-
   @IsDate({ message: 'Valid from must be a valid date' })
   @Type(() => Date)
   validFrom: Date;

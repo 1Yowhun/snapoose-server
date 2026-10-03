@@ -7,7 +7,7 @@ import {
 import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ProviderModule } from './shared/infra/database/provider.module.js';
 import { RoleModule } from './modules/iam/role/role.module.js';
 import { CommonModule } from './common/common.module.js';
@@ -22,6 +22,7 @@ import { LocationModule } from './modules/location/location.module.js';
 import { BoothModule } from './modules/booth/booth.module.js';
 import { FrameModule } from './modules/cms/frame/frame.module.js';
 import { VoucherModule } from './modules/cms/voucher/voucher.module.js';
+import { ProductModule } from './modules/cms/product/product.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -34,7 +35,14 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       appSecret: process.env.OBSERVE_APP_SECRET || '',
       serviceId: 'snapoose_pro',
     }),
-    JwtModule.register({}),
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.getOrThrow<string>('JWT_SECRET'),
+        signOptions: { algorithm: 'HS256', expiresIn: '2h' },
+        verifyOptions: { algorithms: ['HS256'] },
+      }),
+    }),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
@@ -47,6 +55,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     BoothModule,
     FrameModule,
     VoucherModule,
+    ProductModule,
   ],
   controllers: [AppController],
   providers: [

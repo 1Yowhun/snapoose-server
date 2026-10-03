@@ -5,6 +5,7 @@ import { RequestUser } from '../../entity/requestUser.entity.js';
 import { LocationRepository } from '../location/location.repository.js';
 import { BoothRepository } from './booth.repository.js';
 import { TenantRepository } from '../tenant/tenant.repository.js';
+import { generateId } from '../../common/utils/generateCode.js';
 
 @Injectable()
 export class BoothService {
@@ -32,7 +33,7 @@ export class BoothService {
       const payload = {
         ...data,
         tenantId: user.tenantId,
-        code: `BTH-${Date.now()}`,
+        code: `BTH-${generateId()}`,
         status: true,
         createdBy: user.sub,
         updatedBy: user.sub,

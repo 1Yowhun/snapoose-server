@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['src/**/*.spec.ts', 'test/**/*.e2e-spec.ts'],
+    include: ['test/**/*.spec.ts', 'test/**/*.e2e-spec.ts'],
   },
   plugins: [
     // Gunakan plugin SWC agar Vitest memproses TypeScript Decorators NestJS dengan benar

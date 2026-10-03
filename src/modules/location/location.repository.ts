@@ -19,7 +19,7 @@ export class LocationRepository {
   async getLocationData(): Promise<Location[]> {
     const snapshot = await this.firestore
       .collection('locations')
-      .limit(15)
+      .limit(20)
       .get();
 
     return snapshot.docs.map(

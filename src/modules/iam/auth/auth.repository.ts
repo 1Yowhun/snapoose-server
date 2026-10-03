@@ -1,4 +1,4 @@
-import { Inject } from '@nestjs/common';
+import { ConflictException, Inject } from '@nestjs/common';
 import { Firestore } from 'firebase-admin/firestore';
 import { AppLogger } from '../../../common/logger.service.js';
 import { User } from '../../../entity/user.entity.js';
@@ -10,18 +10,18 @@ export class AuthRepository {
     private readonly logger: AppLogger,
   ) {}
 
-  async findUser(tenantId: string, name: string) {
+  async findUser(tenantId: string, normalizedName: string) {
     const snapshot = await this.firestore
       .collection('tenants')
       .doc(tenantId)
       .collection('users')
-      .where('name', '==', name)
+      .where('name', '==', normalizedName)
       .limit(1)
       .get();
 
     if (snapshot.empty) {
       this.logger.log(
-        `User dengan nama "${name}" tidak ditemukan`,
+        `User dengan nama "${normalizedName}" tidak ditemukan`,
         'UserRepository',
       );
       return null;
@@ -30,13 +30,13 @@ export class AuthRepository {
     const data = doc.data();
 
     this.logger.log(
-      `User dengan nama "${name}" ditemukan di Firestore`,
+      `User dengan nama "${normalizedName}" ditemukan di Firestore`,
       'UserRepository',
     );
     return new User({
       id: doc.id,
       tenantId: data.tenantId,
-      code: `USER`,
+      code: data.code,
       name: data.name,
       password: data.password,
       createdAt: data.createdAt?.toDate
@@ -47,22 +47,34 @@ export class AuthRepository {
         : data.updatedAt,
     });
   }
-  async create(tenantId: string, userData: Partial<User>): Promise<User> {
-    const now = new Date();
-    const payload = {
-      ...userData,
-      createdAt: now,
-      updatedAt: now,
-    };
-    const docRef = await this.firestore
+  async createUserWithUniqueName(
+    tenantId: string,
+    normalizedName: string,
+    userData: Partial<User>,
+  ): Promise<User> {
+    const userRef = this.firestore
       .collection('tenants')
       .doc(tenantId)
-      .collection('users')
-      .add(payload);
+      .collection('users');
+
+    await this.firestore.runTransaction(async (tx) => {
+      const usernameDoc = await tx.get(
+        userRef.where('name', '==', normalizedName).limit(1),
+      );
+
+      if (!usernameDoc.empty) {
+        throw new ConflictException(`Nama sudah terdaftar`);
+      }
+
+      tx.set(userRef.doc(), {
+        ...userData,
+        createdAt: new Date(),
+      });
+    });
 
     return new User({
-      id: docRef.id,
-      ...payload,
+      id: userRef.id,
+      ...userData,
     });
   }
 }

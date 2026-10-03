@@ -4,6 +4,7 @@ import { CreateLocationDto } from '../../dto/location.dto.js';
 import { LocationRepository } from './location.repository.js';
 import { RequestUser } from '../../entity/requestUser.entity.js';
 import { TenantRepository } from '../tenant/tenant.repository.js';
+import { generateId } from '../../common/utils/generateCode.js';
 
 @Injectable()
 export class LocationService {
@@ -23,7 +24,7 @@ export class LocationService {
       const payload = {
         ...data,
         tenantId: tenant.id,
-        code: `LOK-${Date.now()}`,
+        code: `LOK-${generateId()}`,
         isActive: true,
         createdBy: user.sub,
         updatedBy: user.sub,

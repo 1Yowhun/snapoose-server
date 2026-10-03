@@ -7,6 +7,7 @@ import {
 } from '../../../dto/voucher.dto.js';
 import { RequestUser } from '../../../entity/requestUser.entity.js';
 import { TenantRepository } from '../../tenant/tenant.repository.js';
+import { generateId } from '../../../common/utils/generateCode.js';
 
 @Injectable()
 export class VoucherService {
@@ -23,9 +24,10 @@ export class VoucherService {
       if (!idTenant) throw new NotFoundException('Tenant tidak ditemukan');
       const payload = {
         ...data,
-        code: `VCH-${Date.now()}`,
+        code: `VCH-${generateId()}`,
         tenantId: idTenant.id,
         isActive: true,
+        usedCount: 0,
         createdAt: now,
         updatedAt: now,
         updatedBy: user.sub,

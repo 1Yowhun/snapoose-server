@@ -6,6 +6,7 @@ import { CreateUserDto } from '../../../dto/user.dto.js';
 import { ConfigService } from '@nestjs/config';
 import { LoginDto } from '../../../dto/login.dto.js';
 import { AppLogger } from '../../../common/logger.service.js';
+import { generateId } from '../../../common/utils/generateCode.js';
 
 @Injectable()
 export class AuthService {
@@ -20,27 +21,21 @@ export class AuthService {
     try {
       const tenantId =
         this.configService.getOrThrow<string>('DEFAULT_TENANT_ID');
-      const existing = await this.authRepository.findUser(tenantId, dto.name);
-      if (existing) {
-        throw new ConflictException(`Nama sudah terdaftar`);
-      }
+      const normalizedName = dto.name.trim().toLowerCase();
       const hashedPassword = await argon2.hash(dto.password);
 
-      const user = await this.authRepository.create(tenantId, {
+      const user = await this.authRepository.createUserWithUniqueName(
         tenantId,
-        code: 'USER',
-        name: dto.name,
-        password: hashedPassword,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-
-      const accessToken = await this.jwt.signAsync({
-        id: user.id,
-        tenantId: user.tenantId,
-        name: user.name,
-        code: user.code,
-      });
+        normalizedName,
+        {
+          tenantId,
+          name: normalizedName,
+          code: `USER-${generateId()}`,
+          password: hashedPassword,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      );
 
       this.logger.log(`User berhasil dibuat`, 'UserService');
       return {
@@ -50,7 +45,6 @@ export class AuthService {
           name: user.name,
           code: user.code,
         },
-        access_token: accessToken,
       };
     } catch (error) {
       this.logger.logError(
@@ -64,15 +58,20 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     try {
+      const normalizedName = dto.name.trim().toLowerCase();
       const tenantId =
         this.configService.getOrThrow<string>('DEFAULT_TENANT_ID');
-      const user = await this.authRepository.findUser(tenantId, dto.name);
+      const user = await this.authRepository.findUser(tenantId, normalizedName);
       if (!user) {
-        throw new ConflictException(`Nama atau password salah`);
+        this.logger.warn('Login gagal, tidak ada nama', 'AuthService');
+        throw new ConflictException(`Nama tidak ada, silahakan register`);
       }
       const isPasswordValid = await argon2.verify(user.password, dto.password);
 
-      if (!isPasswordValid) throw new ConflictException(`Password salah`);
+      if (!isPasswordValid) {
+        this.logger.warn('Login gagal, password salah', 'AuthService');
+        throw new ConflictException(`Password salah`);
+      }
       const accessToken = await this.jwt.signAsync({
         sub: user.id,
         name: user.name,

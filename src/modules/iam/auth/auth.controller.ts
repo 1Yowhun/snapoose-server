@@ -17,11 +17,10 @@ export class AuthController {
   @HttpCode(201)
   @Header('content-type', 'application/json')
   async register(@Body() dto: RegisterDto) {
-    const createUser = await this.authService.register(dto);
+    await this.authService.register(dto);
     const response = {
       success: true,
       message: 'User created successfully',
-      data: createUser,
     };
     return response;
   }
