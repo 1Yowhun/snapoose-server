@@ -14,7 +14,6 @@ import { Request } from 'express';
 export class AuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
-    private configService: ConfigService,
     private reflector: Reflector,
   ) {}
 
@@ -32,9 +31,7 @@ export class AuthGuard implements CanActivate {
     if (!token) throw new UnauthorizedException('Token tidak ada');
 
     try {
-      const payload = await this.jwt.verifyAsync(token, {
-        secret: this.configService.get<string>('JWT_SECRET'),
-      });
+      const payload = await this.jwt.verifyAsync(token);
       request['user'] = payload;
       return true;
     } catch {
