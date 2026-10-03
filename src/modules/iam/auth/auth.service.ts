@@ -29,7 +29,7 @@ export class AuthService {
         normalizedName,
         {
           tenantId,
-          name: dto.name,
+          name: normalizedName,
           code: `USER-${generateId()}`,
           password: hashedPassword,
           createdAt: new Date(),
@@ -57,8 +57,8 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const normalizedName = dto.name.trim().toLowerCase();
     try {
+      const normalizedName = dto.name.trim().toLowerCase();
       const tenantId =
         this.configService.getOrThrow<string>('DEFAULT_TENANT_ID');
       const user = await this.authRepository.findUser(tenantId, normalizedName);

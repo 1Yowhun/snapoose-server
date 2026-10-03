@@ -10,18 +10,18 @@ export class AuthRepository {
     private readonly logger: AppLogger,
   ) {}
 
-  async findUser(tenantId: string, name: string) {
+  async findUser(tenantId: string, normalizedName: string) {
     const snapshot = await this.firestore
       .collection('tenants')
       .doc(tenantId)
       .collection('users')
-      .where('name', '==', name)
+      .where('name', '==', normalizedName)
       .limit(1)
       .get();
 
     if (snapshot.empty) {
       this.logger.log(
-        `User dengan nama "${name}" tidak ditemukan`,
+        `User dengan nama "${normalizedName}" tidak ditemukan`,
         'UserRepository',
       );
       return null;
@@ -30,7 +30,7 @@ export class AuthRepository {
     const data = doc.data();
 
     this.logger.log(
-      `User dengan nama "${name}" ditemukan di Firestore`,
+      `User dengan nama "${normalizedName}" ditemukan di Firestore`,
       'UserRepository',
     );
     return new User({
@@ -68,7 +68,6 @@ export class AuthRepository {
 
       tx.set(userRef.doc(), {
         ...userData,
-        normalizedName,
         createdAt: new Date(),
       });
     });
