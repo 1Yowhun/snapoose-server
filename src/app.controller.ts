@@ -15,4 +15,9 @@ export class AppController {
   async getHello() {
     return `hello world`;
   }
+
+  @Get('/private')
+  async getPrivate() {
+    return `hello private`;
+  }
 }
