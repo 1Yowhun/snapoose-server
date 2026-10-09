@@ -13,6 +13,7 @@ import { Public } from '../../common/decorators/public.decorator.js';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FrameFileValidationPipe } from '../../common/pipe/file.pipe.js';
 import { TenantService } from './tenant.service.js';
+import { ResponseMessage } from '../../common/decorators/metadata.decorator.js';
 
 @Controller('tenant')
 export class TenantController {
@@ -21,17 +22,12 @@ export class TenantController {
   @Public()
   @Post()
   @UseInterceptors(FileInterceptor('logo'))
-  @HttpCode(201)
+  @ResponseMessage('Tenant created successfully')
   @Header('content-type', 'application/json')
   async createTenant(
     @Body() dto: any,
     @UploadedFile(FrameFileValidationPipe()) file: Express.Multer.File,
   ) {
-    await this.tenantService.postTenant(file, dto);
-    const response = {
-      success: true,
-      message: 'Tenant created successfully',
-    };
-    return response;
+    return await this.tenantService.postTenant(file, dto);
   }
 }
