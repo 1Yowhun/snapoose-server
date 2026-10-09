@@ -2,6 +2,10 @@ import { IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class RegisterDto {
   @IsString()
+  @IsNotEmpty()
+  tenantId: string;
+
+  @IsString()
   @MinLength(5, {
     message: 'Name is too short',
   })
