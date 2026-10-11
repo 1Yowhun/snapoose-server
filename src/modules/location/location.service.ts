@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AppLogger } from '../../common/logger.service.js';
 import { CreateLocationDto } from '../../dto/location.dto.js';
 import { LocationRepository } from './location.repository.js';
@@ -11,25 +15,15 @@ export class LocationService {
   constructor(
     private readonly logger: AppLogger,
     private readonly locationRepository: LocationRepository,
-    private readonly tenantRepository: TenantRepository,
   ) {}
 
   async createLocation(data: CreateLocationDto, user: RequestUser) {
     try {
-      const tenant = await this.tenantRepository.findById(user.tenantId);
-      if (!tenant) {
-        throw new NotFoundException('Tenant tidak ditemukan');
-      }
-      const now = new Date();
       const payload = {
         ...data,
-        tenantId: tenant.id,
-        code: `LOK-${generateId()}`,
-        isActive: true,
+        tenantId: user.tenantId,
         createdBy: user.sub,
         updatedBy: user.sub,
-        createdAt: now,
-        updatedAt: now,
       };
 
       const location = await this.locationRepository.create(payload);
@@ -45,10 +39,38 @@ export class LocationService {
     }
   }
 
-  async getLocationList() {
+  async getLocationList(tenantId: string) {
     try {
       this.logger.log(`Location berhasil diambil`, LocationService.name);
-      return await this.locationRepository.getLocationData();
+      return await this.locationRepository.getLocationData(tenantId);
+    } catch (error) {
+      this.logger.logError(
+        'Terjadi masalah ketika mengambil Location',
+        error,
+        LocationService.name,
+      );
+      throw error;
+    }
+  }
+
+  async getById(tenantId: string, id: string) {
+    const location = await this.locationRepository.findById(tenantId, id);
+    if (!location) throw new NotFoundException('Lokasi tidak ditemukan');
+    return location;
+  }
+
+  async setActive(tenantId: string, id: string, isActive: boolean) {
+    const location = await this.getById(tenantId, id);
+    if (isActive && !location.storeName && !location.street) {
+      throw new BadRequestException('Lengkapi data lokasi sebelum diaktifkan');
+    }
+    return this.locationRepository.updateActive(tenantId, id, isActive);
+  }
+
+  async getNameId(tenantId: string) {
+    try {
+      this.logger.log(`Daftar Location berhasil diambil`, LocationService.name);
+      return await this.locationRepository.getNameId(tenantId);
     } catch (error) {
       this.logger.logError(
         'Terjadi masalah ketika mengambil Location',
