@@ -15,7 +15,7 @@ import { WinstonModule } from 'nest-winston';
 import { winstonConfig } from './common/logger.config.js';
 import { AuthModule } from './modules/iam/auth/auth.module.js';
 import { logMiddleware } from './common/middleware/logger.middleware.js';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AuthGuard } from './common/middleware/auth.middleware.js';
 import { JwtModule } from '@nestjs/jwt';
 import { LocationModule } from './modules/location/location.module.js';
@@ -24,6 +24,7 @@ import { FrameModule } from './modules/cms/frame/frame.module.js';
 import { VoucherModule } from './modules/cms/voucher/voucher.module.js';
 import { ProductModule } from './modules/cms/product/product.module.js';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
+import { AllExceptionsFilter } from './common/filters/allExceptions.filter.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -66,6 +67,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       useClass: AuthGuard,
     },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
+    { provide: APP_FILTER, useClass: AllExceptionsFilter }
   ],
 })
 export class AppModule implements NestModule {
