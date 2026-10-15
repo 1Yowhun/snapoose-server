@@ -28,7 +28,7 @@ export const booths = pgTable('booths', {
 
   code: varchar('code', { length: 100 })
     .notNull()
-    .default(sql`'BTH-' || nextval('location_code_seq')`),
+    .default(sql`'BTH-' || nextval('booth_code_seq')`),
   name: varchar('name', { length: 100 }).notNull(),
   serialNumber: varchar('serial_number', { length: 50 }).default(sql`NULL`),
   isActive: boolean('is_active').notNull().default(false),

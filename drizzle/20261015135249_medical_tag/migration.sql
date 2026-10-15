@@ -1,0 +1,1 @@
+ALTER TABLE "booths" ALTER COLUMN "code" SET DEFAULT 'BTH-' || nextval('booth_code_seq');
