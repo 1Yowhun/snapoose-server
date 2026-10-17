@@ -1,4 +1,5 @@
 import { Transform } from 'class-transformer';
+import { toArray, trimString } from '../common/validation/transforms.js';
 import {
   IsString,
   IsNotEmpty,
@@ -7,37 +8,47 @@ import {
   IsOptional,
   IsArray,
   IsIn,
+  ValidateIf,
+  ArrayNotEmpty,
 } from 'class-validator';
 
 export class CreateBoothDto {
-  @IsUUID('4', { message: 'location id must be a valid UUID v4' })
-  @IsNotEmpty({ message: 'Location Id is required' })
+  @IsUUID('4', { message: 'Location ID must be a valid UUID v4' })
+  @IsNotEmpty({ message: 'Location ID is required' })
   locationId: string;
 
-  @IsString()
-  @IsNotEmpty({ message: 'Street is required' })
-  @MaxLength(100, { message: 'Street must not exceed 200 characters' })
+  @Transform(trimString)
+  @IsString({ message: 'Name must be a string' })
+  @IsNotEmpty({ message: 'Name is required' })
+  @MaxLength(100, { message: 'Name must not exceed 100 characters' })
   name: string;
 
   @IsOptional()
-  @MaxLength(50, { message: 'Serial number must not exceed 200 characters' })
-  serialNumber?: string;
+  @Transform(trimString)
+  @IsString({ message: 'Serial number must be a string' })
+  @IsNotEmpty({ message: 'Serial number must not be empty' })
+  @MaxLength(50, { message: 'Serial number must not exceed 50 characters' })
+  serialNumber?: string | null;
 }
 
-const toArray = ({ value }: { value: unknown }) =>
-  typeof value === 'string' ? value.split(',').filter(Boolean) : value;
-
 export class FilterBoothDto {
-  @IsOptional()
+  @ValidateIf((_object, value) => value !== undefined)
   @Transform(toArray)
-  @IsArray()
-  @IsUUID('all', { each: true })
+  @IsArray({ message: 'Location IDs must be an array' })
+  @ArrayNotEmpty({ message: 'Location IDs must contain at least one value' })
+  @IsUUID('4', {
+    each: true,
+    message: 'Each location ID must be a valid UUID v4',
+  })
   locationIds?: string[];
 
-
-  @IsOptional()
+  @ValidateIf((_object, value) => value !== undefined)
   @Transform(toArray)
-  @IsArray()
-  @IsIn(['active', 'inactive'], { each: true })
+  @IsArray({ message: 'Statuses must be an array' })
+  @ArrayNotEmpty({ message: 'Statuses must contain at least one value' })
+  @IsIn(['active', 'inactive'], {
+    each: true,
+    message: 'Each status must be active or inactive',
+  })
   statuses?: ('active' | 'inactive')[];
 }

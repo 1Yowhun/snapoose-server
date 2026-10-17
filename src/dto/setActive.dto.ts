@@ -1,7 +1,6 @@
-// src/common/dto/set-active.dto.ts
 import { IsBoolean } from 'class-validator';
 
 export class SetActiveDto {
-  @IsBoolean()
+  @IsBoolean({ message: 'isActive must be a boolean (true or false)' })
   isActive: boolean;
 }
