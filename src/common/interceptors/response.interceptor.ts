@@ -20,7 +20,7 @@ export class ResponseInterceptor<T> implements NestInterceptor<
   ): Observable<ApiResponse<T>> {
     const message =
       this.reflector.get<string>(RESPONSE_MESSAGE_KEY, ctx.getHandler()) ??
-      'success';
+      'Request completed successfully';
     const statusCode = ctx.switchToHttp().getResponse().statusCode;
     return next
       .handle()

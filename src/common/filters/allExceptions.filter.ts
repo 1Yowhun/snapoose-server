@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { AppLogger } from '../logger.service.js';
 
-
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   constructor(private readonly logger: AppLogger) {}
@@ -23,7 +22,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const cause = exception?.cause ?? exception;
 
     this.logger.logError(
-      `Unhandled error pada ${req.method} ${req.url}: ${cause?.message}`,
+      `Unhandled request error: method=${req.method} path=${req.path}`,
       exception,
       'AllExceptionsFilter',
     );
