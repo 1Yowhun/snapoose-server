@@ -1,0 +1,1 @@
+ALTER TABLE "frames" ADD COLUMN "frame_type" varchar(100) NOT NULL;
