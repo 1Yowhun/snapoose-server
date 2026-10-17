@@ -9,7 +9,6 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ProviderModule } from './shared/infra/database/provider.module.js';
-import { RoleModule } from './modules/iam/role/role.module.js';
 import { CommonModule } from './common/common.module.js';
 import { WinstonModule } from 'nest-winston';
 import { winstonConfig } from './common/logger.config.js';
@@ -51,7 +50,6 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     }),
     WinstonModule.forRoot(winstonConfig),
     ProviderModule,
-    RoleModule,
     CommonModule,
     AuthModule,    LocationModule,
     BoothModule,
