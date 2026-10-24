@@ -1,11 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { AppLogger } from '../../common/logger.service.js';
-import { CreateBoothDto } from '../../dto/createBooth.dto.js';
-import { RequestUser } from '../../entity/requestUser.entity.js';
-import { LocationRepository } from '../location/location.repository.js';
+import { CreateBoothDto, FilterBoothDto } from '../../dto/booth.dto.js';
 import { BoothRepository } from './booth.repository.js';
 import { TenantRepository } from '../tenant/tenant.repository.js';
-import { generateId } from '../../common/utils/generateCode.js';
 
 @Injectable()
 export class BoothService {
@@ -15,41 +12,53 @@ export class BoothService {
     private readonly boothRepository: BoothRepository,
   ) {}
 
-  async createBooth(
-    data: CreateBoothDto,
-    user: RequestUser,
-    locationId: string,
+  async createBooth(dto: CreateBoothDto, tenantId: string, userId: string) {
+    const location = await this.boothRepository.findLocationById(
+      dto.locationId,
+      tenantId,
+    );
+    if (!location) throw new NotFoundException('Location not found');
+
+    const booth = await this.boothRepository.create({
+      ...dto,
+      tenantId,
+      createdBy: userId,
+      updatedBy: userId,
+    });
+    this.logger.log(
+      `Booth created: tenantId=${tenantId} userId=${userId}`,
+      BoothService.name,
+    );
+    return booth;
+  }
+
+  async getBoothList(tenantId: string, filter: FilterBoothDto) {
+    const booth = await this.boothRepository.getBoothList(tenantId, filter);
+    this.logger.debug(
+      `Booths retrieved: tenantId=${tenantId} count=${booth.length}`,
+      BoothService.name,
+    );
+    return booth;
+  }
+
+  async updateBoothStatus(
+    tenantId: string,
+    id: string,
+    isActive: boolean,
+    userId: string,
   ) {
-    try {
-      const [tenant, location] = await Promise.all([
-        await this.tenantRepository.findById(user.tenantId),
-        await this.boothRepository.findLocationById(locationId),
-      ]);
-      if (!tenant) throw new NotFoundException('Tenant tidak ditemukan');
-      if (!location) throw new NotFoundException('Location tidak ditemukan');
+    const booth = await this.boothRepository.updateStatus(
+      tenantId,
+      id,
+      isActive,
+      userId,
+    );
+    if (!booth) throw new NotFoundException('Booth not found');
 
-      const now = new Date();
-
-      const payload = {
-        ...data,
-        tenantId: user.tenantId,
-        code: `BTH-${generateId()}`,
-        status: true,
-        createdBy: user.sub,
-        updatedBy: user.sub,
-        installedAt: now,
-        updatedAt: now,
-      };
-      const booth = await this.boothRepository.create(locationId, payload);
-      this.logger.log(`booth berhasil dibuat`, BoothService.name);
-      return booth;
-    } catch (error) {
-      this.logger.logError(
-        'Terjadi masalah ketika membuat booth',
-        error,
-        BoothService.name,
-      );
-      throw error;
-    }
+    this.logger.log(
+      `Booth status updated: boothId=${id} tenantId=${tenantId} userId=${userId} isActive=${booth.isActive}`,
+      BoothService.name,
+    );
+    return booth;
   }
 }

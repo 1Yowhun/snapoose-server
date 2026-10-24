@@ -3,47 +3,69 @@ import {
   Controller,
   Get,
   Header,
-  HttpCode,
-  Ip,
+  Param,
+  ParseUUIDPipe,
+  Patch,
   Post,
+  Query,
 } from '@nestjs/common';
-import { AppLogger } from '../../common/logger.service.js';
-import { Public } from '../../common/decorators/public.decorator.js';
-import { CreateLocationDto } from '../../dto/location.dto.js';
+import {
+  CreateLocationDto,
+  FilterLocationDto,
+} from '../../dto/location.dto.js';
 import { CurrentUser } from '../../common/decorators/currentUser.decorator.js';
 import { RequestUser } from '../../entity/requestUser.entity.js';
 import { LocationService } from './location.service.js';
+import { ResponseMessage } from '../../common/decorators/metadata.decorator.js';
+import { SetActiveDto } from '../../dto/setActive.dto.js';
 
 @Controller('location')
 export class LocationController {
   constructor(private readonly locationService: LocationService) {}
 
   @Post()
-  @HttpCode(201)
+  @ResponseMessage('Location created successfully')
   @Header('content-type', 'application/json')
   async createLocation(
     @Body() dto: CreateLocationDto,
     @CurrentUser()
     user: RequestUser,
   ) {
-    await this.locationService.createLocation(dto, user);
-    const response = {
-      success: true,
-      message: 'Location created successfully',
-    };
-    return response;
+    return await this.locationService.createLocation(dto, user);
   }
 
   @Get()
-  @HttpCode(200)
+  @ResponseMessage('Locations retrieved successfully')
   @Header('content-type', 'application/json')
-  async getDataLocation() {
-    const location = await this.locationService.getLocationList();
-    const response = {
-      success: true,
-      message: 'Location Get successfully',
-      data: location,
-    };
-    return response;
+  async getDataLocation(
+    @CurrentUser()
+    user: RequestUser,
+    @Query() filter: FilterLocationDto,
+  ) {
+    return await this.locationService.getLocationList(user.tenantId, filter);
+  }
+
+  @ResponseMessage('Location status updated successfully')
+  @Patch(':id/status')
+  async setActive(
+    @CurrentUser() user: RequestUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: SetActiveDto,
+  ) {
+    return await this.locationService.setActive(
+      user.tenantId,
+      id,
+      dto.isActive,
+      user.sub,
+    );
+  }
+
+  @Get('/dropdown')
+  @ResponseMessage('Location options retrieved successfully')
+  async getLocationDataDropdown(
+    @CurrentUser()
+    user: RequestUser,
+  ) {
+    return await this.locationService.getNameId(user.tenantId);
   }
 }

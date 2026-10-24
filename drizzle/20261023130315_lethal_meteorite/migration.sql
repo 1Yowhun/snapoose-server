@@ -1,0 +1,1 @@
+ALTER TABLE "products" ALTER COLUMN "price" SET DATA TYPE numeric(12,2) USING "price"::numeric(12,2);

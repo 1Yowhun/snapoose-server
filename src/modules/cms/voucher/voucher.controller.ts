@@ -3,65 +3,59 @@ import {
   Controller,
   Get,
   Header,
-  HttpCode,
   Param,
+  ParseUUIDPipe,
+  Patch,
   Post,
-  Put,
+  Query,
 } from '@nestjs/common';
 import { VoucherService } from './voucher.service.js';
 import { CurrentUser } from '../../../common/decorators/currentUser.decorator.js';
 import { RequestUser } from '../../../entity/requestUser.entity.js';
 import {
   CreateVoucherDto,
-  UpdateVoucherDto,
+  VoucherFilterDto,
 } from '../../../dto/voucher.dto.js';
+import { ResponseMessage } from '../../../common/decorators/metadata.decorator.js';
+import { SetActiveDto } from '../../../dto/setActive.dto.js';
 
 @Controller('voucher')
 export class VoucherController {
   constructor(private readonly voucherService: VoucherService) {}
 
   @Post()
-  @HttpCode(201)
+  @ResponseMessage('Voucher created successfully')
   @Header('content-type', 'application/json')
   async createVoucher(
     @Body() dto: CreateVoucherDto,
     @CurrentUser()
     user: RequestUser,
   ) {
-    await this.voucherService.postVoucher(dto, user);
-    const response = {
-      success: true,
-      message: 'Voucher created successfully',
-    };
-    return response;
+    await this.voucherService.postVoucher(user.tenantId, dto, user.sub);
   }
 
-  @Put(':id')
-  @HttpCode(201)
-  @Header('content-type', 'application/json')
-  async updateVoucher(
-    @Body() dto: UpdateVoucherDto,
-    @Param('id') id: string,
-    @CurrentUser()
-    user: RequestUser,
+  @ResponseMessage('Voucher status updated successfully')
+  @Patch(':id/status')
+  async setActive(
+    @CurrentUser() user: RequestUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: SetActiveDto,
   ) {
-    await this.voucherService.putVoucher(dto, user, id);
-    const response = {
-      success: true,
-      message: 'Voucher updated successfully',
-    };
-    return response;
+    return await this.voucherService.patchVoucherActive(
+      user.tenantId,
+      id,
+      dto.isActive,
+      user.sub,
+    );
   }
 
   @Get()
-  @HttpCode(200)
-  async getVoucherList() {
-    const voucher = await this.voucherService.getVoucher();
-    const response = {
-      success: true,
-      message: 'Voucher get successfully',
-      data: voucher,
-    };
-    return response;
+  @ResponseMessage('Vouchers retrieved successfully')
+  async getVoucherList(
+    @CurrentUser()
+    user: RequestUser,
+    @Query() filter: VoucherFilterDto,
+  ) {
+    return await this.voucherService.getVoucherList(user.tenantId, filter);
   }
 }

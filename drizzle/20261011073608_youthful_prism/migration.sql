@@ -1,0 +1,1 @@
+ALTER TABLE "vouchers" ALTER COLUMN "discount_precent" SET DATA TYPE numeric USING "discount_precent"::numeric;

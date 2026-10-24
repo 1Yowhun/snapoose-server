@@ -7,13 +7,13 @@ export function encryptAccessToken(
 ): string {
   try {
     if (!secretKeyHex) {
-      throw new Error('ENCRYPTION_KEY tidak ditemukan');
+      throw new Error('ENCRYPTION_KEY is not configured');
     }
 
     const key = Buffer.from(secretKeyHex, 'hex');
     if (key.length !== 32) {
       throw new Error(
-        'ENCRYPTION_KEY harus berukuran 32 bytes (64 karakter hex)',
+        'ENCRYPTION_KEY must contain 32 bytes (64 hexadecimal characters)',
       );
     }
 
@@ -28,6 +28,8 @@ export function encryptAccessToken(
     return `${iv.toString('hex')}:${authTag}:${encrypted}`;
   } catch (error) {
     console.error('Encryption failure:', error);
-    throw new InternalServerErrorException('Gagal mengosongkan/mengenkripsi token');
+    throw new InternalServerErrorException(
+      'Unable to create an authentication token',
+    );
   }
 }

@@ -10,7 +10,7 @@ export const r2Factory = (configService: ConfigService) => {
   const keyId = configService.get('R2_ACCESS_KEY_ID');
   const accessKey = configService.get('R2_SECRET_ACCESS_KEY');
 
-  if (!id && !keyId && !accessKey) {
+  if (!id || !keyId || !accessKey) {
     throw new NotFoundException('.env tidak ada');
   }
 

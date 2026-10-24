@@ -3,35 +3,59 @@ import {
   Controller,
   Get,
   Header,
-  HttpCode,
   Param,
+  ParseUUIDPipe,
+  Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/currentUser.decorator.js';
 import { RequestUser } from '../../entity/requestUser.entity.js';
 import { BoothService } from './booth.service.js';
-import { CreateBoothDto } from '../../dto/createBooth.dto.js';
+import { CreateBoothDto, FilterBoothDto } from '../../dto/booth.dto.js';
+import { ResponseMessage } from '../../common/decorators/metadata.decorator.js';
+import { SetActiveDto } from '../../dto/setActive.dto.js';
 
-@Controller('location/:locationId/booth')
+@Controller('booth')
 export class BoothController {
   constructor(private readonly boothService: BoothService) {}
 
   @Post()
-  @HttpCode(201)
+  @ResponseMessage('Booth created successfully')
   @Header('content-type', 'application/json')
   async createBooth(
-    @Param('locationId') locationId: string,
     @Body() dto: CreateBoothDto,
     @CurrentUser()
     user: RequestUser,
   ) {
-    console.log(locationId, user);
-    const createUser = await this.boothService.createBooth(dto, user, locationId);
-    const response = {
-      success: true,
-      message: 'Location created successfully',
-      data: createUser,
-    };
-    return response;
+    await this.boothService.createBooth(dto, user.tenantId, user.sub);
+  }
+
+  @Get()
+  @ResponseMessage('Booths retrieved successfully')
+  @Header('content-type', 'application/json')
+  async getBoothList(
+    @CurrentUser()
+    user: RequestUser,
+    @Query() filter: FilterBoothDto,
+  ) {
+    return await this.boothService.getBoothList(user.tenantId, filter);
+  }
+
+  @Patch(':id/status')
+  @ResponseMessage('Booth status updated successfully')
+  @Header('content-type', 'application/json')
+  async updateBoothStatuses(
+    @CurrentUser()
+    user: RequestUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: SetActiveDto,
+  ) {
+    await this.boothService.updateBoothStatus(
+      user.tenantId,
+      id,
+      dto.isActive,
+      user.sub,
+    );
   }
 }

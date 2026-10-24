@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { AuthRepository } from './auth.repository.js';
@@ -6,7 +6,7 @@ import { CreateUserDto } from '../../../dto/user.dto.js';
 import { ConfigService } from '@nestjs/config';
 import { LoginDto } from '../../../dto/login.dto.js';
 import { AppLogger } from '../../../common/logger.service.js';
-import { generateId } from '../../../common/utils/generateCode.js';
+import { encryptAccessToken } from '../../../common/utils/encrypt.js';
 
 @Injectable()
 export class AuthService {
@@ -17,84 +17,67 @@ export class AuthService {
     private readonly logger: AppLogger,
   ) {}
 
-  async register(dto: Omit<CreateUserDto, 'id' | 'tenantId' | 'code'>) {
-    try {
-      const tenantId =
-        this.configService.getOrThrow<string>('DEFAULT_TENANT_ID');
-      const normalizedName = dto.name.trim().toLowerCase();
-      const hashedPassword = await argon2.hash(dto.password);
+  async register(dto: CreateUserDto) {
+    const hashedPassword = await argon2.hash(dto.password);
+    const payload = {
+      tenantId: dto.tenantId,
+      name: dto.name,
+      password: hashedPassword,
+    };
 
-      const user = await this.authRepository.createUserWithUniqueName(
-        tenantId,
-        normalizedName,
-        {
-          tenantId,
-          name: normalizedName,
-          code: `USER-${generateId()}`,
-          password: hashedPassword,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      );
+    const user = await this.authRepository.createUser(payload);
 
-      this.logger.log(`User berhasil dibuat`, 'UserService');
-      return {
-        user: {
-          id: user.id,
-          tenantId: user.tenantId,
-          name: user.name,
-          code: user.code,
-        },
-      };
-    } catch (error) {
-      this.logger.logError(
-        'Terjadi masalah ketika membuat User',
-        error,
-        'UserService',
-      );
-      throw error;
-    }
+    this.logger.log(
+      `User registered: userId=${user.id} tenantId=${user.tenantId}`,
+      AuthService.name,
+    );
+    return {
+      user: {
+        id: user.id,
+        tenantId: user.tenantId,
+        name: user.name,
+        code: user.code,
+      },
+    };
   }
 
   async login(dto: LoginDto) {
-    try {
-      const normalizedName = dto.name.trim().toLowerCase();
-      const tenantId =
-        this.configService.getOrThrow<string>('DEFAULT_TENANT_ID');
-      const user = await this.authRepository.findUser(tenantId, normalizedName);
-      if (!user) {
-        this.logger.warn('Login gagal, tidak ada nama', 'AuthService');
-        throw new ConflictException(`Nama tidak ada, silahakan register`);
-      }
-      const isPasswordValid = await argon2.verify(user.password, dto.password);
+    const user = await this.authRepository.findByName(dto.name);
+    const invalid = new UnauthorizedException('Invalid username or password');
+    if (!user) {
+      this.logger.warn('Login failed: invalid credentials', AuthService.name);
+      throw invalid;
+    }
+    const ok = await argon2.verify(user.password, dto.password);
+    if (!ok) {
+      this.logger.warn('Login failed: invalid credentials', AuthService.name);
+      throw invalid;
+    }
+    const payload = {
+      sub: user.id,
+      name: user.name,
+      tenantId: user.tenantId,
+      code: user.code,
+    };
 
-      if (!isPasswordValid) {
-        this.logger.warn('Login gagal, password salah', 'AuthService');
-        throw new ConflictException(`Password salah`);
-      }
-      const accessToken = await this.jwt.signAsync({
-        sub: user.id,
+    const accessToken = await this.jwt.signAsync(payload);
+
+    const encryptToken = encryptAccessToken(
+      accessToken,
+      this.configService.getOrThrow<string>('ENCRYPTION_KEY'),
+    );
+    this.logger.log(
+      `Login succeeded: userId=${user.id} tenantId=${user.tenantId}`,
+      AuthService.name,
+    );
+    return {
+      user: {
+        id: user.id,
         name: user.name,
         code: user.code,
         tenantId: user.tenantId,
-      });
-      this.logger.log(`User berhasil login`, 'UserService');
-      return {
-        user: {
-          id: user.id,
-          name: user.name,
-          code: user.code,
-          tenantId: user.tenantId,
-        },
-        access_token: accessToken,
-      };
-    } catch (error) {
-      this.logger.logError(
-        'Terjadi masalah ketika login',
-        error,
-        'UserService',
-      );
-      throw error;
-    }
+      },
+      encryptedToken: encryptToken,
+    };
   }
 }

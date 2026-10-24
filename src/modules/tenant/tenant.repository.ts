@@ -26,9 +26,8 @@ export class TenantRepository {
     return { id: doc.id, ...doc.data() };
   }
 
-  async insertTenant(data: NewTenant): Promise<Tenant> {
-    const [tenant] = await this.db.insert(tenants).values(data).returning();
-    return tenant;
+  async insertTenant(data: NewTenant) {
+    return await this.db.insert(tenants).values(data);
   }
 
   async insertPhotoLogo(

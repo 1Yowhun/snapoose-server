@@ -6,7 +6,10 @@ import { AppLogger } from '../logger.service.js';
 export class logMiddleware implements NestMiddleware {
   constructor(private readonly logger: AppLogger) {}
   use(req: Request, res: Response, next: NextFunction) {
-    this.logger.info(`Receive request for URL: ${req.url} from IP:${req.ip}`);
+    this.logger.debug(
+      `Request received: method=${req.method} path=${req.path}`,
+      logMiddleware.name,
+    );
     next();
   }
 }

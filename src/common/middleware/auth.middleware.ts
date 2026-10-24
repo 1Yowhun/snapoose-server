@@ -20,7 +20,8 @@ export class AuthGuard implements CanActivate {
     private readonly configService: ConfigService,
   ) {
     const key = this.configService.get<string>('ENCRYPTION_KEY');
-    if (!key) throw new UnauthorizedException('Key tidak ada');
+    if (!key)
+      throw new UnauthorizedException('Encryption key is not configured');
     this.secretKey = Buffer.from(key, 'hex');
   }
 
@@ -35,7 +36,8 @@ export class AuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const encryptedToken = this.extractTokenFromHeader(request);
 
-    if (!encryptedToken) throw new UnauthorizedException('Token tidak ada');
+    if (!encryptedToken)
+      throw new UnauthorizedException('Authentication token is required');
 
     try {
       const rawJwt = this.decryptToken(encryptedToken);
@@ -43,7 +45,9 @@ export class AuthGuard implements CanActivate {
       request['user'] = payload;
       return true;
     } catch {
-      throw new UnauthorizedException('Invalid token');
+      throw new UnauthorizedException(
+        'Invalid or expired authentication token',
+      );
     }
   }
 
@@ -55,7 +59,7 @@ export class AuthGuard implements CanActivate {
   private decryptToken(encryptedToken: string): string {
     const parts = encryptedToken.split(':');
     if (parts.length !== 3) {
-      throw new Error('Format token tidak valid');
+      throw new Error('Invalid token format');
     }
 
     const [ivHex, authTagHex, ciphertextHex] = parts;

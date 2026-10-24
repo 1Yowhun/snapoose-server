@@ -9,7 +9,7 @@ export class AppService {
   ) {}
   async createUser(name: string) {
     if (!name) {
-      throw new BadRequestException('Query parameter "name" wajib diisi');
+      throw new BadRequestException('Query parameter "name" is required');
     }
     const userDoc = await this.firestore.collection('users').add({
       name: name,

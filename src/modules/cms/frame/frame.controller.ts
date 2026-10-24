@@ -2,30 +2,33 @@ import {
   Body,
   Controller,
   Get,
-  Header,
-  HttpCode,
   Param,
+  ParseUUIDPipe,
+  Patch,
   Post,
+  Query,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { CurrentUser } from '../../../common/decorators/currentUser.decorator.js';
 import { RequestUser } from '../../../entity/requestUser.entity.js';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Public } from '../../../common/decorators/public.decorator.js';
 import { FrameService } from './frame.service.js';
 import {
   CreateCustomFrameDto,
   CreateFrameDto,
+  FilterFrameDto,
 } from '../../../dto/frame.dto.js';
 import { FrameFileValidationPipe } from '../../../common/pipe/file.pipe.js';
+import { ResponseMessage } from '../../../common/decorators/metadata.decorator.js';
+import { SetActiveDto } from '../../../dto/setActive.dto.js';
 
 @Controller('frame')
 export class FrameController {
   constructor(private readonly frameService: FrameService) {}
 
   @Post()
-  @HttpCode(201)
+  @ResponseMessage('Frame created successfully')
   @UseInterceptors(FileInterceptor('frame'))
   async normalFrame(
     @Body() dto: CreateFrameDto,
@@ -33,17 +36,11 @@ export class FrameController {
     user: RequestUser,
     @UploadedFile(FrameFileValidationPipe()) file: Express.Multer.File,
   ) {
-    const frame = await this.frameService.postNormalFrame(file, dto, user);
-    const response = {
-      success: true,
-      message: 'Frame created successfully',
-      data: frame,
-    };
-    return response;
+    await this.frameService.postNormalFrame(file, dto, user.sub, user.tenantId);
   }
 
   @Post('/custom-frame')
-  @HttpCode(201)
+  @ResponseMessage('Custom frame created successfully')
   @UseInterceptors(FileInterceptor('frame'))
   async customFrame(
     @Body() dto: CreateCustomFrameDto,
@@ -52,34 +49,44 @@ export class FrameController {
     @UploadedFile(FrameFileValidationPipe()) file: Express.Multer.File,
   ) {
     await this.frameService.postCustomFrame(file, dto, user);
-    const response = {
-      success: true,
-      message: 'Custom Frame created successfully',
-    };
-    return response;
   }
 
   @Get()
-  @HttpCode(200)
-  async getFrame() {
-    const getFrame = await this.frameService.getFrame();
-    const response = {
-      success: true,
-      message: 'Get Frame successfully',
-      data: getFrame,
-    };
-    return response;
+  @ResponseMessage('Frames retrieved successfully')
+  async getFrame(
+    @CurrentUser()
+    user: RequestUser,
+    @Query() filter: FilterFrameDto,
+  ) {
+    return await this.frameService.getFrame(user.tenantId, user.sub, filter);
   }
 
   @Get('/custom-frame')
-  @HttpCode(200)
-  async getCustomFrame() {
-    const getFrame = await this.frameService.getCustomFrame();
-    const response = {
-      success: true,
-      message: 'Get Frame successfully',
-      data: getFrame,
-    };
-    return response;
+  @ResponseMessage('Custom frames retrieved successfully')
+  async getCustomFrame(
+    @CurrentUser()
+    user: RequestUser,
+    @Query() filter: FilterFrameDto,
+  ) {
+    return await this.frameService.getCustomFrame(
+      user.tenantId,
+      user.sub,
+      filter,
+    );
+  }
+
+  @ResponseMessage('Frame status updated successfully')
+  @Patch(':id/status')
+  async setActive(
+    @CurrentUser() user: RequestUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: SetActiveDto,
+  ) {
+    return await this.frameService.patchVoucherActive(
+      user.tenantId,
+      id,
+      dto.isActive,
+      user.sub,
+    );
   }
 }

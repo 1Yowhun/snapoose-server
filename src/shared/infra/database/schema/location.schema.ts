@@ -9,6 +9,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { tenants } from './tenant.schema.js';
 import { sql } from 'drizzle-orm';
+import { users } from './user.schema.js';
 
 export const locationCodeSeq = pgSequence('location_code_seq', {
   startWith: 1,
@@ -27,10 +28,14 @@ export const locations = pgTable('locations', {
     .default(sql`'LOK-' || nextval('location_code_seq')`),
   storeName: varchar('store_name', { length: 50 }).notNull(),
   street: text('street'),
-  isActive: boolean('is_active').notNull().default(true),
+  isActive: boolean('is_active').notNull().default(false),
 
-  createdBy: varchar('created_by', { length: 100 }),
-  updatedBy: varchar('updated_by', { length: 100 }),
+  createdBy: uuid('created_by').references(() => users.id, {
+    onDelete: 'set null',
+  }),
+  updatedBy: uuid('updated_by').references(() => users.id, {
+    onDelete: 'set null',
+  }),
 
   createdAt: timestamp('created_at', { precision: 0, withTimezone: true })
     .notNull()
@@ -39,6 +44,7 @@ export const locations = pgTable('locations', {
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
+    
 });
 
 export type Location = typeof locations.$inferSelect;

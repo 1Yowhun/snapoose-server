@@ -9,6 +9,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { tenants } from './tenant.schema.js';
 import { locations } from './location.schema.js';
+import { users } from './user.schema.js';
 
 export const boothCodeSeq = pgSequence('booth_code_seq', {
   startWith: 1,
@@ -27,12 +28,15 @@ export const booths = pgTable('booths', {
 
   code: varchar('code', { length: 100 })
     .notNull()
-    .default(sql`'BTH-' || nextval('location_code_seq')`),
+    .default(sql`'BTH-' || nextval('booth_code_seq')`),
   name: varchar('name', { length: 100 }).notNull(),
-  serialNumber: varchar('serial_number', { length: 50 }).notNull(),
+  serialNumber: varchar('serial_number', { length: 50 }).default(sql`NULL`),
   isActive: boolean('is_active').notNull().default(false),
 
-  last_sync: timestamp('installed_at', { precision: 0, withTimezone: true }),
+  last_sync: timestamp('last_sync', {
+    precision: 0,
+    withTimezone: true,
+  }).default(sql`NULL`),
   createdAt: timestamp('created_at', { precision: 0, withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -40,8 +44,14 @@ export const booths = pgTable('booths', {
     .notNull()
     .defaultNow()
     .$onUpdate(() => new Date()),
+
+  createdBy: uuid('created_by').references(() => users.id, {
+    onDelete: 'set null',
+  }),
+  updatedBy: uuid('updated_by').references(() => users.id, {
+    onDelete: 'set null',
+  }),
 });
 
-// 3. Infer Types
 export type Booth = typeof booths.$inferSelect;
 export type NewBooth = typeof booths.$inferInsert;

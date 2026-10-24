@@ -1,18 +1,4 @@
-import { IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
+import { CreateUserDto } from './user.dto.js';
 
-export class RegisterDto {
-  @IsString()
-  @MinLength(5, {
-    message: 'Name is too short',
-  })
-  @MaxLength(20, {
-    message: 'Name is too long',
-  })
-  @IsNotEmpty()
-  name: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @MinLength(8, { message: 'Password min 8' })
-  password: string;
-}
+// Inherit validation so registration and user creation follow the same rules.
+export class RegisterDto extends CreateUserDto {}

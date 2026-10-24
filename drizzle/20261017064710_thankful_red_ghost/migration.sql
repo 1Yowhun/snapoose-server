@@ -1,0 +1,1 @@
+ALTER TABLE "frames" ALTER COLUMN "overlay_url" SET NOT NULL;
