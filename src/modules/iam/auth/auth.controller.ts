@@ -1,5 +1,4 @@
-import { Body, Controller, Header, HttpCode, Post, Req } from '@nestjs/common';
-import { AppLogger } from '../../../common/logger.service.js';
+import { Body, Controller, Header, Post } from '@nestjs/common';
 import { AuthService } from './auth.service.js';
 import { RegisterDto } from '../../../dto/register.dto.js';
 import { LoginDto } from '../../../dto/login.dto.js';
@@ -8,13 +7,10 @@ import { ResponseMessage } from '../../../common/decorators/metadata.decorator.j
 
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private readonly logger: AppLogger,
-    private readonly authService: AuthService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
   @Public()
-  @ResponseMessage('User created successfully')
+  @ResponseMessage('User registered successfully')
   @Post('register')
   @Header('content-type', 'application/json')
   async register(@Body() dto: RegisterDto) {
@@ -22,7 +18,7 @@ export class AuthController {
   }
 
   @Public()
-  @ResponseMessage('User Login successfully')
+  @ResponseMessage('Login successful')
   @Post('login')
   @Header('content-type', 'application/json')
   async login(@Body() dto: LoginDto) {
