@@ -1,5 +1,5 @@
 import { Transform, Type, plainToInstance } from 'class-transformer';
-import { trimString } from '../common/validation/transforms.js';
+import { toNumber, trimString } from '../common/validation/transforms.js';
 import { IsDateOnOrAfter } from '../common/validation/isDateOnOrAfter.decorator.js';
 import {
   IsString,
@@ -10,6 +10,10 @@ import {
   IsArray,
   ArrayMinSize,
   ValidateNested,
+  ValidateIf,
+  Max,
+  ArrayUnique,
+  IsUUID,
 } from 'class-validator';
 import { BadRequestException } from '@nestjs/common';
 
@@ -30,6 +34,28 @@ export class CreateFrameDto {
   @IsString({ message: 'Frame type must be a string' })
   @IsNotEmpty({ message: 'Frame type is required' })
   frameType: string;
+
+  @Transform(
+    ({ value }) => {
+      let parsed: unknown = value;
+      if (typeof value === 'string') {
+        try {
+          parsed = JSON.parse(value);
+        } catch {
+          throw new BadRequestException('Booth IDs must be a valid JSON array');
+        }
+      }
+      return parsed;
+    },
+    { toClassOnly: true },
+  )
+  @IsArray({ message: 'Booth IDs must be an array' })
+  @ArrayMinSize(1, { message: 'At least one Booth ID is required' })
+  @ArrayUnique({
+    message: 'Booth IDs must not contain duplicates',
+  })
+  @IsUUID('4', { each: true, message: 'Each Booth ID must be a valid UUID' })
+  boothIds: string[];
 
   @Transform(
     ({ value }) => {
@@ -59,6 +85,29 @@ export class CreateCustomFrameDto {
   @IsString({ message: 'Name must be a string' })
   @IsNotEmpty({ message: 'Name is required' })
   name: string;
+
+  @Transform(
+    ({ value }) => {
+      let parsed: unknown = value;
+      if (typeof value === 'string') {
+        try {
+          parsed = JSON.parse(value);
+        } catch {
+          throw new BadRequestException('Booth IDs must be a valid JSON array');
+        }
+      }
+      return parsed;
+    },
+    { toClassOnly: true },
+  )
+  @IsArray({ message: 'Booth IDs must be an array' })
+  @ArrayMinSize(1, { message: 'At least one Booth ID is required' })
+  @ArrayUnique({
+    message: 'Booth IDs must not contain duplicates',
+  })
+  @ValidateNested({ each: true })
+  @IsUUID('4', { each: true, message: 'Each Booth ID must be a valid UUID' })
+  boothIds: string[];
 
   @Transform(
     ({ value }) => {
@@ -96,4 +145,20 @@ export class CreateCustomFrameDto {
     message: 'Valid until must be on or after valid from',
   })
   validUntil: string;
+}
+
+export class FilterFrameDto {
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(toNumber)
+  @IsInt({ message: 'Page must be an integer' })
+  @Min(1, { message: 'Page must be greater than or equal to 1' })
+  @Max(2147483647, { message: 'Page must not exceed 2147483647' })
+  page? = 1;
+
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(toNumber)
+  @IsInt({ message: 'Limit must be an integer' })
+  @Min(1, { message: 'Limit must be greater than or equal to 1' })
+  @Max(20, { message: 'Limit must not exceed 20' })
+  limit? = 20;
 }
