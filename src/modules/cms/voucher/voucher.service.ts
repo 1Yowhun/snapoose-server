@@ -1,99 +1,83 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AppLogger } from '../../../common/logger.service.js';
 import { VoucherRepository } from './voucher.repository.js';
 import {
   CreateVoucherDto,
-  UpdateVoucherDto,
+  VoucherFilterDto,
 } from '../../../dto/voucher.dto.js';
-import { RequestUser } from '../../../entity/requestUser.entity.js';
 import { TenantRepository } from '../../tenant/tenant.repository.js';
-import { generateId } from '../../../common/utils/generateCode.js';
 
 @Injectable()
 export class VoucherService {
   constructor(
     private readonly voucherRepository: VoucherRepository,
     private readonly logger: AppLogger,
-    private readonly tenantRepository: TenantRepository,
   ) {}
 
-  async postVoucher(data: CreateVoucherDto, user: RequestUser) {
-    try {
-      const now = new Date();
-      const idTenant = await this.tenantRepository.findById(user.tenantId);
-      if (!idTenant) throw new NotFoundException('Tenant tidak ditemukan');
-      const payload = {
-        ...data,
-        code: `VCH-${generateId()}`,
-        tenantId: idTenant.id,
-        isActive: true,
-        usedCount: 0,
-        createdAt: now,
-        updatedAt: now,
-        updatedBy: user.sub,
-        createdBy: user.sub,
-      };
-
-      const voucher = await this.voucherRepository.createVoucher(payload);
-      this.logger.log(`Voucher berhasil dibuat`, VoucherService.name);
-      return voucher;
-    } catch (error) {
-      this.logger.logError(
-        'Terjadi masalah ketika membuat Voucher',
-        error,
-        VoucherService.name,
-      );
-      throw error;
-    }
+  async postVoucher(tenantId: string, data: CreateVoucherDto, userId: string) {
+    const { boothIds, ...voucherDetails } = data;
+    const newVoucherData = {
+      ...voucherDetails,
+      tenantId: tenantId,
+      validFrom: new Date(data.validFrom),
+      validUntil: new Date(data.validUntil),
+      createdBy: userId,
+      updatedBy: userId,
+    };
+    const voucher = await this.voucherRepository.createVoucher(
+      { ...newVoucherData },
+      boothIds,
+    );
+    this.logger.log(
+      `Voucher created: voucherId=${voucher.id} tenantId=${tenantId} userId=${userId}`,
+      VoucherService.name,
+    );
+    return voucher;
   }
 
-  async putVoucher(data: UpdateVoucherDto, user: RequestUser, id: string) {
-    try {
-      const [voucherId, idTenant] = await Promise.all([
-        this.voucherRepository.findVoucherById(id),
-        this.tenantRepository.findById(user.tenantId),
-      ]);
-
-      if (!idTenant) throw new NotFoundException('Tenant tidak ditemukan');
-      if (!voucherId) throw new NotFoundException('Voucher tidak ditemukan');
-
-      const now = new Date();
-
-      const payload = {
-        ...data,
-        tenantId: idTenant.id,
-        updatedAt: now,
-        updatedBy: user.sub,
-      };
-
-      const voucher = await this.voucherRepository.updateVoucherById(
-        voucherId.id,
-        payload,
+  async getVoucherList(tenantId: string, filter: VoucherFilterDto) {
+    if (
+      filter.remainingMin !== undefined &&
+      filter.remainingMax !== undefined &&
+      filter.remainingMin > filter.remainingMax
+    ) {
+      throw new BadRequestException(
+        'Minimum remaining quota must not exceed maximum remaining quota',
       );
-      this.logger.log(`Voucher berhasil diupdate`, VoucherService.name);
-      return voucher;
-    } catch (error) {
-      this.logger.logError(
-        'Terjadi masalah ketika update voucher',
-        error,
-        VoucherService.name,
-      );
-      throw error;
     }
+
+    const vouchers = await this.voucherRepository.getVoucher(tenantId, filter);
+    this.logger.debug(
+      `Vouchers retrieved: tenantId=${tenantId} count=${vouchers.items.length}`,
+      VoucherService.name,
+    );
+    return vouchers;
   }
 
-  async getVoucher() {
-    try {
-      const voucher = await this.voucherRepository.getAllVoucherList();
-      this.logger.log(`Voucher berhasil diget`, VoucherService.name);
-      return voucher;
-    } catch (error) {
-      this.logger.logError(
-        'Terjadi masalah ketika mengambil data voucher',
-        error,
-        VoucherService.name,
-      );
-      throw error;
-    }
+  async patchVoucherActive(
+    tenantId: string,
+    id: string,
+    isActive: boolean,
+    userId: string,
+  ) {
+    const voucher = await this.voucherRepository.getVoucherById(tenantId, id);
+    if (!voucher) throw new NotFoundException('Voucher not found');
+
+    const voucherUpdate = await this.voucherRepository.updateActive(
+      tenantId,
+      id,
+      isActive,
+      userId,
+    );
+    this.logger.log(
+      `Voucher status updated: voucherId=${id} tenantId=${tenantId} userId=${userId} isActive=${isActive}`,
+      VoucherService.name,
+    );
+    return voucherUpdate;
   }
 }
