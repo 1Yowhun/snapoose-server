@@ -14,6 +14,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { FrameFileValidationPipe } from '../../common/pipe/file.pipe.js';
 import { TenantService } from './tenant.service.js';
 import { ResponseMessage } from '../../common/decorators/metadata.decorator.js';
+import { CreateTenantDto } from '../../dto/tenant.dto.js';
 
 @Controller('tenant')
 export class TenantController {
@@ -25,7 +26,7 @@ export class TenantController {
   @ResponseMessage('Tenant created successfully')
   @Header('content-type', 'application/json')
   async createTenant(
-    @Body() dto: any,
+    @Body() dto: CreateTenantDto,
     @UploadedFile(FrameFileValidationPipe()) file: Express.Multer.File,
   ) {
     return await this.tenantService.postTenant(file, dto);
