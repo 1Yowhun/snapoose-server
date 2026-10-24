@@ -1,5 +1,6 @@
 import {
   boolean,
+  pgEnum,
   pgSequence,
   pgTable,
   timestamp,
@@ -13,6 +14,7 @@ export const userCodeSeq = pgSequence('user_code_seq', {
   startWith: 1,
   increment: 1,
 });
+export const roleEnum = pgEnum('role', ['USER', 'ADMIN'])
 
 export const users = pgTable('users', {
   id: uuid().primaryKey().defaultRandom(),
@@ -26,6 +28,7 @@ export const users = pgTable('users', {
   name: varchar('name').unique().notNull(),
   password: varchar('password').notNull(),
   isActive: boolean('is_active').notNull().default(true),
+  role: roleEnum(),
   createdAt: timestamp('created_at', { precision: 0, withTimezone: true })
     .notNull()
     .defaultNow(),
