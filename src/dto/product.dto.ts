@@ -10,6 +10,10 @@ import {
   IsUUID,
   IsInt,
   IsEnum,
+  isArray,
+  ArrayMinSize,
+  ValidateNested,
+  ArrayUnique,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import {
@@ -30,6 +34,14 @@ export class CreateProductDto {
   @Min(0, { message: 'Price must be greater than or equal to 0' })
   @Max(2147483647, { message: 'Price must not exceed 2147483647' })
   price: number;
+
+  @IsArray({ message: 'Booth IDs must be an array' })
+  @ArrayMinSize(1, { message: 'At least one Booth ID is required' })
+  @ArrayUnique({
+    message: 'Booth IDs must not contain duplicates',
+  })
+  @IsUUID('4', { each: true, message: 'Each Booth ID must be a valid UUID' })
+  boothIds: string[];
 }
 
 export enum ProductStatus {
@@ -52,13 +64,13 @@ export class FilterProductDto {
 
   @ValidateIf((_object, value) => value !== undefined)
   @Transform(toArray)
-  @IsArray({ message: 'Location IDs must be an array' })
-  @ArrayNotEmpty({ message: 'Location IDs must contain at least one value' })
+  @IsArray({ message: 'Booth IDs must be an array' })
+  @ArrayNotEmpty({ message: 'Booth IDs must contain at least one value' })
   @IsUUID('4', {
     each: true,
-    message: 'Each location ID must be a valid UUID v4',
+    message: 'Each Booth ID must be a valid UUID v4',
   })
-  locationIds?: string[];
+  boothIds?: string[];
 
   @ValidateIf((_object, value) => value !== undefined)
   @Transform(toArray)
@@ -69,4 +81,18 @@ export class FilterProductDto {
     message: 'Each status must be active or inactive',
   })
   status?: ProductStatus[];
+
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(toNumber)
+  @IsInt({ message: 'Page must be an integer' })
+  @Min(1, { message: 'Page must be greater than or equal to 1' })
+  @Max(2147483647, { message: 'Page must not exceed 2147483647' })
+  page? = 1;
+
+  @ValidateIf((_object, value) => value !== undefined)
+  @Transform(toNumber)
+  @IsInt({ message: 'Limit must be an integer' })
+  @Min(1, { message: 'Limit must be greater than or equal to 1' })
+  @Max(20, { message: 'Limit must not exceed 20' })
+  limit? = 20;
 }

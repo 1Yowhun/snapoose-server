@@ -1,7 +1,12 @@
-import { Injectable } from '@nestjs/common';
-import { CreateProductDto } from '../../../dto/product.dto.js';
-import { RequestUser } from '../../../entity/requestUser.entity.js';
-import { generateId } from '../../../common/utils/generateCode.js';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  CreateProductDto,
+  FilterProductDto,
+} from '../../../dto/product.dto.js';
 import { AppLogger } from '../../../common/logger.service.js';
 import { ProductRepository } from './product.repository.js';
 
@@ -12,46 +17,65 @@ export class ProductService {
     private readonly logger: AppLogger,
   ) {}
 
-  async postProduct(data: CreateProductDto, user: RequestUser) {
-    try {
-      const now = new Date();
-      const payload = {
-        ...data,
-        code: `PRD-${generateId()}`,
-        tenantId: user.tenantId,
-        isActive: true,
-        isPrintable: true,
-        includedPrintQuantity: 2,
-        createdBy: user.sub,
-        updatedBy: user.sub,
-        createdAt: now,
-        updatedAt: now,
-      };
-      const product = await this.productRepository.createProduct(payload);
-      this.logger.log(`Product berhasil dibuat`, ProductService.name);
-      return product;
-    } catch (error) {
-      this.logger.logError(
-        'Terjadi masalah ketika membuat Product',
-        error,
-        ProductService.name,
-      );
-      throw error;
-    }
+  async postProduct(data: CreateProductDto, tenantId: string, userId: string) {
+    const { boothIds, ...productDetails } = data;
+    const newProductData = {
+      ...productDetails,
+      tenantId: tenantId, 
+      createdBy: userId,
+      updatedBy: userId,
+    };
+    const product = await this.productRepository.createProduct(
+      { ...newProductData },
+      boothIds
+    );
+    this.logger.log(
+      `Product created: productId=${product.id} tenantId=${tenantId} userId=${userId}`,
+      ProductService.name,
+    );
+    return product;
   }
 
-  async getProduct(){
-    try {
-      const product = await this.productRepository.getAllProductList();
-      this.logger.log(`Product berhasil diambil`, ProductService.name);
-      return product;
-    } catch (error) {
-      this.logger.logError(
-        'Terjadi masalah ketika mengambil data Product',
-        error,
-        ProductService.name,
+  async setActive(
+    tenantId: string,
+    id: string,
+    isActive: boolean,
+    userId: string,
+  ) {
+    const product = await this.productRepository.getProductById(tenantId, id);
+    if (!product) throw new NotFoundException('Product not found');
+
+    const productUpdate = await this.productRepository.updateActive(
+      tenantId,
+      id,
+      isActive,
+      userId,
+    );
+    this.logger.log(
+      `Product status updated: productId=${id} tenantId=${tenantId} userId=${userId} isActive=${isActive}`,
+      ProductService.name,
+    );
+    return productUpdate;
+  }
+
+  async getProduct(tenantId: string, filter: FilterProductDto, userId: string) {
+    if (
+      filter.minPrice !== undefined &&
+      filter.maxPrice !== undefined &&
+      filter.minPrice > filter.maxPrice
+    ) {
+      throw new BadRequestException(
+        'Minimum price must not exceed maximum price',
       );
-      throw error;
     }
+    const products = await this.productRepository.getAllProductList(
+      tenantId,
+      filter,
+    );
+    this.logger.debug(
+      `Products retrieved: tenantId=${tenantId} userId=${userId} count=${products.items.length}`,
+      ProductService.name,
+    );
+    return products;
   }
 }
