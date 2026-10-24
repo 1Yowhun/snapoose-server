@@ -4,11 +4,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AppLogger } from '../../common/logger.service.js';
-import { CreateLocationDto } from '../../dto/location.dto.js';
+import { CreateLocationDto, FilterLocationDto } from '../../dto/location.dto.js';
 import { LocationRepository } from './location.repository.js';
 import { RequestUser } from '../../entity/requestUser.entity.js';
-import { TenantRepository } from '../tenant/tenant.repository.js';
-import { generateId } from '../../common/utils/generateCode.js';
 
 @Injectable()
 export class LocationService {
@@ -18,66 +16,67 @@ export class LocationService {
   ) {}
 
   async createLocation(data: CreateLocationDto, user: RequestUser) {
-    try {
-      const payload = {
-        ...data,
-        tenantId: user.tenantId,
-        createdBy: user.sub,
-        updatedBy: user.sub,
-      };
+    const payload = {
+      ...data,
+      tenantId: user.tenantId,
+      createdBy: user.sub,
+      updatedBy: user.sub,
+    };
 
-      const location = await this.locationRepository.create(payload);
-      this.logger.log(`Location berhasil dibuat`, LocationService.name);
-      return location;
-    } catch (error) {
-      this.logger.logError(
-        'Terjadi masalah ketika membuat Location',
-        error,
-        LocationService.name,
-      );
-      throw error;
-    }
+    const location = await this.locationRepository.create(payload);
+    this.logger.log(
+      `Location created: tenantId=${user.tenantId} userId=${user.sub}`,
+      LocationService.name,
+    );
+    return location;
   }
 
-  async getLocationList(tenantId: string) {
-    try {
-      this.logger.log(`Location berhasil diambil`, LocationService.name);
-      return await this.locationRepository.getLocationData(tenantId);
-    } catch (error) {
-      this.logger.logError(
-        'Terjadi masalah ketika mengambil Location',
-        error,
-        LocationService.name,
-      );
-      throw error;
-    }
+  async getLocationList(tenantId: string, filter: FilterLocationDto) {
+    const locations = await this.locationRepository.getLocationData(tenantId, filter);
+    this.logger.debug(
+      `Locations retrieved: tenantId=${tenantId} count=${locations.items.length}`,
+      LocationService.name,
+    );
+    return locations;
   }
 
   async getById(tenantId: string, id: string) {
     const location = await this.locationRepository.findById(tenantId, id);
-    if (!location) throw new NotFoundException('Lokasi tidak ditemukan');
+    if (!location) throw new NotFoundException('Location not found');
     return location;
   }
 
-  async setActive(tenantId: string, id: string, isActive: boolean) {
+  async setActive(
+    tenantId: string,
+    id: string,
+    isActive: boolean,
+    userId: string,
+  ) {
     const location = await this.getById(tenantId, id);
     if (isActive && !location.storeName && !location.street) {
-      throw new BadRequestException('Lengkapi data lokasi sebelum diaktifkan');
+      throw new BadRequestException(
+        'Complete the location details before activating it',
+      );
     }
-    return this.locationRepository.updateActive(tenantId, id, isActive);
+    const locationUpdate = await this.locationRepository.updateActive(
+      tenantId,
+      id,
+      isActive,
+      userId,
+    );
+    this.logger.log(
+      `Location status updated: locationId=${id} tenantId=${tenantId} userId=${userId} isActive=${isActive}`,
+      LocationService.name,
+    );
+    return locationUpdate;
   }
 
   async getNameId(tenantId: string) {
-    try {
-      this.logger.log(`Daftar Location berhasil diambil`, LocationService.name);
-      return await this.locationRepository.getNameId(tenantId);
-    } catch (error) {
-      this.logger.logError(
-        'Terjadi masalah ketika mengambil Location',
-        error,
-        LocationService.name,
-      );
-      throw error;
-    }
+    const locations = await this.locationRepository.getNameId(tenantId);
+    this.logger.debug(
+      `Location options retrieved: tenantId=${tenantId} count=${locations.length}`,
+      LocationService.name,
+    );
+    return locations;
   }
 }

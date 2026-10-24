@@ -7,12 +7,11 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
-import { AppLogger } from '../../common/logger.service.js';
-import { Public } from '../../common/decorators/public.decorator.js';
 import {
   CreateLocationDto,
-  SetLocationActiveDto,
+  FilterLocationDto,
 } from '../../dto/location.dto.js';
 import { CurrentUser } from '../../common/decorators/currentUser.decorator.js';
 import { RequestUser } from '../../entity/requestUser.entity.js';
@@ -36,16 +35,17 @@ export class LocationController {
   }
 
   @Get()
-  @ResponseMessage("Location's data has been got successfully")
+  @ResponseMessage('Locations retrieved successfully')
   @Header('content-type', 'application/json')
   async getDataLocation(
     @CurrentUser()
     user: RequestUser,
+    @Query() filter: FilterLocationDto,
   ) {
-    return await this.locationService.getLocationList(user.tenantId);
+    return await this.locationService.getLocationList(user.tenantId, filter);
   }
 
-  @ResponseMessage("Location's status has been updated successfully")
+  @ResponseMessage('Location status updated successfully')
   @Patch(':id/status')
   async setActive(
     @CurrentUser() user: RequestUser,
@@ -56,10 +56,12 @@ export class LocationController {
       user.tenantId,
       id,
       dto.isActive,
+      user.sub,
     );
   }
 
-  @Get('/options')
+  @Get('/dropdown')
+  @ResponseMessage('Location options retrieved successfully')
   async getLocationDataDropdown(
     @CurrentUser()
     user: RequestUser,
