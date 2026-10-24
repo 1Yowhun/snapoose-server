@@ -3,7 +3,6 @@ import {
   Controller,
   Get,
   Header,
-  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -22,7 +21,7 @@ export class BoothController {
   constructor(private readonly boothService: BoothService) {}
 
   @Post()
-  @ResponseMessage('Booth has been created successfully')
+  @ResponseMessage('Booth created successfully')
   @Header('content-type', 'application/json')
   async createBooth(
     @Body() dto: CreateBoothDto,
@@ -44,7 +43,7 @@ export class BoothController {
   }
 
   @Patch(':id/status')
-  @ResponseMessage('Booths updated successfully')
+  @ResponseMessage('Booth status updated successfully')
   @Header('content-type', 'application/json')
   async updateBoothStatuses(
     @CurrentUser()
