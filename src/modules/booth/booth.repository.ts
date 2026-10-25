@@ -1,5 +1,4 @@
 import { Inject, NotFoundException } from '@nestjs/common';
-import { Firestore } from 'firebase-admin/firestore';
 import { DRIZZLE } from '../../shared/infra/database/drizzle.factory.js';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import {
