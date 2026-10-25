@@ -16,28 +16,5 @@ export const winstonConfig = {
         }),
       ),
     }),
-
-    new DailyRotateFile({
-      filename: 'logs/application-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      level: logLevel,
-      maxFiles: '14d',
-      maxSize: '100m',
-      format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json(),
-      ),
-    }),
-    new DailyRotateFile({
-      filename: 'logs/error-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      level: 'error',
-      maxFiles: '14d',
-      maxSize: '100m',
-      format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json(),
-      ),
-    }),
   ],
 };
