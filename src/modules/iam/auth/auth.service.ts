@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  HttpException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { AuthRepository } from './auth.repository.js';
@@ -18,27 +23,35 @@ export class AuthService {
   ) {}
 
   async register(dto: CreateUserDto) {
-    const hashedPassword = await argon2.hash(dto.password);
-    const payload = {
-      tenantId: dto.tenantId,
-      name: dto.name,
-      password: hashedPassword,
-    };
+    try {
+      const hashedPassword = await argon2.hash(dto.password);
+      const payload = {
+        tenantId: dto.tenantId,
+        name: dto.name,
+        password: hashedPassword,
+      };
 
-    const user = await this.authRepository.createUser(payload);
+      const user = await this.authRepository.createUser(payload);
 
-    this.logger.log(
-      `User registered: userId=${user.id} tenantId=${user.tenantId}`,
-      AuthService.name,
-    );
-    return {
-      user: {
-        id: user.id,
-        tenantId: user.tenantId,
-        name: user.name,
-        code: user.code,
-      },
-    };
+      this.logger.log(
+        `User registered: userId=${user.id} tenantId=${user.tenantId}`,
+        AuthService.name,
+      );
+      return {
+        user: {
+          id: user.id,
+          tenantId: user.tenantId,
+          name: user.name,
+          code: user.code,
+        },
+      };
+    } catch (e: any) {
+      if (e instanceof HttpException) throw e;
+      const err = e.cause ?? e;
+      if (err.code === '23503')
+        throw new NotFoundException('Tenant not founded');
+      throw e;
+    }
   }
 
   async login(dto: LoginDto) {
