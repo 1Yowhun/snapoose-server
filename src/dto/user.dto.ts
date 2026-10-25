@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
 import {
+  IsEnum,
   IsNotEmpty,
   IsString,
   IsUUID,
@@ -8,6 +9,10 @@ import {
 } from 'class-validator';
 import { trimString } from '../common/validation/transforms.js';
 
+export enum UserRole {
+  ADMIN = 'admin',
+  USER = 'user',
+}
 export class CreateUserDto {
   @IsUUID('4', { message: 'Tenant ID must be a valid UUID v4' })
   @IsNotEmpty({ message: 'Tenant ID is required' })
@@ -29,4 +34,7 @@ export class CreateUserDto {
   @IsNotEmpty({ message: 'Password is required' })
   @MinLength(8, { message: 'Password must be at least 8 characters long' })
   password: string;
+
+  @IsEnum(UserRole)
+  role: UserRole;
 }
