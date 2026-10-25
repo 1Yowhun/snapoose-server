@@ -35,7 +35,7 @@ export class BoothService {
   async getBoothList(tenantId: string, filter: FilterBoothDto) {
     const booth = await this.boothRepository.getBoothList(tenantId, filter);
     this.logger.debug(
-      `Booths retrieved: tenantId=${tenantId} count=${booth.length}`,
+      `Booths retrieved: tenantId=${tenantId} count=${booth.items.length}`,
       BoothService.name,
     );
     return booth;
