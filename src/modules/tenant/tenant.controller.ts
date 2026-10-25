@@ -29,6 +29,6 @@ export class TenantController {
     @Body() dto: CreateTenantDto,
     @UploadedFile(FrameFileValidationPipe()) file: Express.Multer.File,
   ) {
-    return await this.tenantService.postTenant(file, dto);
+    await this.tenantService.postTenant(file, dto);
   }
 }

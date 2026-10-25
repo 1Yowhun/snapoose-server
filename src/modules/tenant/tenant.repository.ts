@@ -1,5 +1,4 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { Firestore } from '@google-cloud/firestore';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { R2_CLIENT } from '../../shared/infra/cloudflare/r2.factory.js';
 import { ConfigService } from '@nestjs/config';
@@ -14,17 +13,10 @@ import {
 @Injectable()
 export class TenantRepository {
   constructor(
-    @Inject('FIRESTORE') private readonly firestore: Firestore,
     @Inject(R2_CLIENT) private readonly r2: S3Client,
     @Inject(DRIZZLE) private readonly db: NodePgDatabase,
     private readonly configService: ConfigService,
   ) {}
-
-  async findById(tenantId: string) {
-    const doc = await this.firestore.collection('tenants').doc(tenantId).get();
-    if (!doc.exists) return null;
-    return { id: doc.id, ...doc.data() };
-  }
 
   async insertTenant(data: NewTenant) {
     return await this.db.insert(tenants).values(data);
