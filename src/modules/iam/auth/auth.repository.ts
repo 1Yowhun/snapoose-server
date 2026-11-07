@@ -1,7 +1,4 @@
 import { ConflictException, Inject } from '@nestjs/common';
-import { Firestore } from 'firebase-admin/firestore';
-import { AppLogger } from '../../../common/logger.service.js';
-import { User } from '../../../entity/user.entity.js';
 import { DRIZZLE } from '../../../shared/infra/database/drizzle.factory.js';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import {

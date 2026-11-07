@@ -24,6 +24,11 @@ import { VoucherModule } from './modules/cms/voucher/voucher.module.js';
 import { ProductModule } from './modules/cms/product/product.module.js';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
 import { AllExceptionsFilter } from './common/filters/allExceptions.filter.js';
+import { SessionModule } from './modules/session/session.module.js';
+import { TransactionController } from './modules/transaction/transaction.controller.js';
+import { TransactionService } from './modules/transaction/transaction.service.js';
+import { TransactionModule } from './modules/transaction/transaction.module.js';
+import { AppRepository } from './app.repository.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -56,8 +61,10 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     FrameModule,
     VoucherModule,
     ProductModule,
+    SessionModule,
+    TransactionModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, TransactionController],
   providers: [
     AppService,
     {
@@ -65,7 +72,9 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       useClass: AuthGuard,
     },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
-    { provide: APP_FILTER, useClass: AllExceptionsFilter }
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    TransactionService,
+    AppRepository
   ],
 })
 export class AppModule implements NestModule {

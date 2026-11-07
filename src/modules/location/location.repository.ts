@@ -1,5 +1,4 @@
 import { Inject } from '@nestjs/common';
-import { Firestore } from 'firebase-admin/firestore';
 import {
   locations,
   NewLocation,
@@ -13,8 +12,6 @@ import { PaginatedResult } from '../../common/interface/pagination.interface.js'
 
 export class LocationRepository {
   constructor(
-    @Inject('FIRESTORE')
-    private readonly firestore: Firestore,
     @Inject(DRIZZLE) private readonly db: NodePgDatabase,
   ) {}
 
