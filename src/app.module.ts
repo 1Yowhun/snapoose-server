@@ -8,7 +8,7 @@ import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ProviderModule } from './shared/infra/database/provider.module.js';
+import { ProviderModule } from './shared/infra/provider.module.js';
 import { CommonModule } from './common/common.module.js';
 import { WinstonModule } from 'nest-winston';
 import { winstonConfig } from './common/logger.config.js';
@@ -25,9 +25,7 @@ import { ProductModule } from './modules/cms/product/product.module.js';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
 import { AllExceptionsFilter } from './common/filters/allExceptions.filter.js';
 import { SessionModule } from './modules/session/session.module.js';
-import { TransactionController } from './modules/transaction/transaction.controller.js';
-import { TransactionService } from './modules/transaction/transaction.service.js';
-import { TransactionModule } from './modules/transaction/transaction.module.js';
+import { PaymentModule } from './modules/payment/payment.module.js';
 import { AppRepository } from './app.repository.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
@@ -45,7 +43,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>('JWT_SECRET'),
-        signOptions: { algorithm: 'HS256', expiresIn: '2h' },
+        signOptions: { algorithm: 'HS256' },
         verifyOptions: { algorithms: ['HS256'] },
       }),
     }),
@@ -56,15 +54,16 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     WinstonModule.forRoot(winstonConfig),
     ProviderModule,
     CommonModule,
-    AuthModule,    LocationModule,
+    AuthModule,
+    LocationModule,
     BoothModule,
     FrameModule,
     VoucherModule,
     ProductModule,
     SessionModule,
-    TransactionModule,
+    PaymentModule,
   ],
-  controllers: [AppController, TransactionController],
+  controllers: [AppController],
   providers: [
     AppService,
     {
@@ -73,8 +72,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     },
     { provide: APP_INTERCEPTOR, useClass: ResponseInterceptor },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
-    TransactionService,
-    AppRepository
+    AppRepository,
   ],
 })
 export class AppModule implements NestModule {

@@ -1,7 +1,7 @@
 import { Inject } from '@nestjs/common';
 import { DRIZZLE } from './shared/infra/database/drizzle.factory.js';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, ne, notInArray } from 'drizzle-orm';
 import {
   frameBooths,
   frames,
@@ -19,14 +19,19 @@ import { booths } from './shared/infra/database/schema/booth.schema.js';
 export class AppRepository {
   constructor(@Inject(DRIZZLE) private readonly db: NodePgDatabase) {}
 
-  async checkSerialNumber(serialNumber: string, tenantId: string) {
+  async findInstallableBooths(
+    tenantId: string,
+    locationId: string,
+    boothId: string,
+  ) {
     const [data] = await this.db
-      .select()
+      .select({ id: booths.id })
       .from(booths)
       .where(
         and(
-          eq(booths.serialNumber, serialNumber),
+          eq(booths.id, boothId),
           eq(booths.tenantId, tenantId),
+          eq(booths.locationId, locationId),
           eq(booths.isActive, true),
         ),
       )
@@ -34,12 +39,52 @@ export class AppRepository {
 
     return data ?? null;
   }
-  async getDataByBooth(tenantId: string, serialNumber: string, dto: string[]) {
-    const uniqueBoothIds = [...new Set(dto)];
-    if (!uniqueBoothIds || dto.length === 0) {
-      return { products: [], frames: [], vouchers: [] };
-    }
 
+  async bindDevice(
+    tenantId: string,
+    serialNumber: string,
+    boothId: string,
+    tokenId: string,
+    userId: string,
+  ) {
+    await this.db.transaction(async (tx) => {
+      // Lepas mesin ini dari booth lama (jika pindah booth)
+      await tx
+        .update(booths)
+        .set({ serialNumber: null, deviceTokenId: null, updatedBy: userId })
+        .where(
+          and(eq(booths.serialNumber, serialNumber), ne(booths.id, boothId)),
+        );
+
+      await tx
+        .update(booths)
+        .set({ serialNumber, deviceTokenId: tokenId, updatedBy: userId })
+        .where(and(eq(booths.tenantId, tenantId), eq(booths.id, boothId)));
+    });
+  }
+
+  async isDeviceTokenActive(
+    tenantId: string,
+    serialNumber: string,
+    tokenId: string,
+  ) {
+    const [data] = await this.db
+      .select({ id: booths.id })
+      .from(booths)
+      .where(
+        and(
+          eq(booths.tenantId, tenantId),
+          eq(booths.serialNumber, serialNumber),
+          eq(booths.deviceTokenId, tokenId),
+          eq(booths.isActive, true),
+        ),
+      )
+      .limit(1);
+
+    return !!data;
+  }
+
+  async getDataByBooth(tenantId: string, boothId: string) {
     const [availableProducts, availableFrames, availableVouchers] =
       await Promise.all([
         this.db
@@ -54,7 +99,7 @@ export class AppRepository {
                 this.db
                   .select({ productId: productBooths.productId })
                   .from(productBooths)
-                  .where(inArray(productBooths.boothId, uniqueBoothIds)),
+                  .where(eq(productBooths.boothId, boothId)),
               ),
             ),
           ),
@@ -71,7 +116,7 @@ export class AppRepository {
                 this.db
                   .select({ frameId: frameBooths.frameId })
                   .from(frameBooths)
-                  .where(inArray(frameBooths.boothId, uniqueBoothIds)),
+                  .where(eq(frameBooths.boothId, boothId)),
               ),
             ),
           ),
@@ -88,18 +133,12 @@ export class AppRepository {
                 this.db
                   .select({ voucherId: voucherBooths.voucherId })
                   .from(voucherBooths)
-                  .where(inArray(voucherBooths.boothId, uniqueBoothIds)),
+                  .where(eq(voucherBooths.boothId, boothId)),
               ),
             ),
           ),
       ]);
 
-    await this.db
-      .update(booths)
-      .set({
-        serialNumber: serialNumber,
-      })
-      .where(and(eq(booths.tenantId, tenantId), eq(booths.isActive, true)));
     return {
       products: availableProducts,
       frames: availableFrames,

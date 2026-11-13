@@ -23,18 +23,15 @@ export class AppController {
     return `hello private`;
   }
 
-  @Public()
+  // Butuh user token (hasil login); mengembalikan device token untuk desktop
   @Post('/desk/install')
   @ResponseMessage('Desktop Installation successfully')
   @Header('content-type', 'application/json')
   async installDesktop(
-    @Headers('X-DEVICE-ID') serialNumber: string,
+    @CurrentUser() user: RequestUser,
+    @Headers('x-device-id') serialNumber: string,
     @Body() dto: CreateInstallDto,
   ) {
-    return this.appService.installationDevice(
-      dto.tenantId,
-      serialNumber,
-      dto.boothIds,
-    );
+    return this.appService.installationDevice(user, serialNumber, dto);
   }
 }
