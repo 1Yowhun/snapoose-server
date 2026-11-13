@@ -32,6 +32,8 @@ export const booths = pgTable('booths', {
   name: varchar('name', { length: 100 }).notNull(),
   serialNumber: varchar('serial_number', { length: 50 }).default(sql`NULL`),
   isActive: boolean('is_active').notNull().default(false),
+  // jti device token yang aktif; null / berbeda = token device dicabut
+  deviceTokenId: uuid('device_token_id').default(sql`NULL`),
 
   last_sync: timestamp('last_sync', {
     precision: 0,

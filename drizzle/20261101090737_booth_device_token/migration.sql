@@ -1,0 +1,1 @@
+ALTER TABLE "booths" ADD COLUMN "device_token_id" uuid DEFAULT NULL;
