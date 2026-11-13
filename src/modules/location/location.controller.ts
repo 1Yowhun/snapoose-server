@@ -31,7 +31,7 @@ export class LocationController {
     @CurrentUser()
     user: RequestUser,
   ) {
-    return await this.locationService.createLocation(dto, user);
+    await this.locationService.createLocation(dto, user);
   }
 
   @Get()
