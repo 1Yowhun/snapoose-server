@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -10,6 +11,8 @@ import { IS_PUBLIC_KEY } from '../decorators/public.decorator.js';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { createDecipheriv } from 'node:crypto';
+import { IS_DEVICE_KEY } from '../decorators/device.decorator.js';
+import { AppRepository } from '../../app.repository.js';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -18,6 +21,7 @@ export class AuthGuard implements CanActivate {
     private readonly jwt: JwtService,
     private reflector: Reflector,
     private readonly configService: ConfigService,
+    private readonly appRepository: AppRepository,
   ) {
     const key = this.configService.get<string>('ENCRYPTION_KEY');
     if (!key)
@@ -39,16 +43,54 @@ export class AuthGuard implements CanActivate {
     if (!encryptedToken)
       throw new UnauthorizedException('Authentication token is required');
 
+    let payload: any;
     try {
       const rawJwt = this.decryptToken(encryptedToken);
-      const payload = await this.jwt.verifyAsync(rawJwt);
-      request['user'] = payload;
-      return true;
+      payload = await this.jwt.verifyAsync(rawJwt);
     } catch {
       throw new UnauthorizedException(
         'Invalid or expired authentication token',
       );
     }
+
+    const isDeviceRoute =
+      this.reflector.getAllAndOverride<boolean>(IS_DEVICE_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]) ?? false;
+    const isDeviceToken = payload.type === 'device';
+
+
+    // Device token hanya untuk endpoint desktop, user token sebaliknya
+    if (isDeviceRoute !== isDeviceToken) {
+      throw new ForbiddenException(
+        isDeviceRoute
+          ? 'This endpoint requires a device token'
+          : 'Device token is not allowed for this endpoint',
+      );
+    }
+
+    if (isDeviceToken) await this.verifyDevice(request, payload);
+
+    request['user'] = payload;
+    return true;
+  }
+
+  private async verifyDevice(request: Request, payload: any) {
+    const deviceId = request.headers['x-device-id'];
+    if (typeof deviceId !== 'string' || deviceId.trim() !== payload.sub)
+      throw new UnauthorizedException('X-DEVICE-ID does not match the token');
+
+    if (!payload.jti || !payload.tenantId)
+      throw new UnauthorizedException('Invalid device token');
+
+    const active = await this.appRepository.isDeviceTokenActive(
+      payload.tenantId,
+      payload.sub,
+      payload.jti,
+    );
+    if (!active)
+      throw new UnauthorizedException('Device token has been revoked');
   }
 
   private extractTokenFromHeader(request: Request): string | undefined {

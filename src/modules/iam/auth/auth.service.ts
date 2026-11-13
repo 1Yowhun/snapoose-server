@@ -67,13 +67,14 @@ export class AuthService {
       throw invalid;
     }
     const payload = {
+      type: 'user',
       sub: user.id,
       name: user.name,
       tenantId: user.tenantId,
       code: user.code,
     };
 
-    const accessToken = await this.jwt.signAsync(payload);
+    const accessToken = await this.jwt.signAsync(payload, { expiresIn: '1h' });
 
     const encryptToken = encryptAccessToken(
       accessToken,

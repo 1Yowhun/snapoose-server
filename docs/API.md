@@ -1,6 +1,6 @@
 # Snapoose Pro — API Documentation
 
-Dokumentasi REST API berdasarkan controller, DTO, service, repository, dan schema saat ini. Diperbarui pada **24 Oktober 2026**. Data modul di bawah disimpan di PostgreSQL melalui Drizzle; file gambar diunggah ke Cloudflare R2. Perilaku yang belum selesai ditandai secara eksplisit; contoh sukses bukan bukti pengujian terhadap server atau database yang berjalan.
+Dokumentasi REST API berdasarkan controller, DTO, service, repository, dan schema saat ini. Diperbarui pada **13 November 2026**. Data modul di bawah disimpan di PostgreSQL melalui Drizzle; file gambar diunggah ke Cloudflare R2. Perilaku yang belum selesai ditandai secara eksplisit; contoh sukses bukan bukti pengujian terhadap server atau database yang berjalan.
 
 ### Daftar isi
 
@@ -14,9 +14,10 @@ Dokumentasi REST API berdasarkan controller, DTO, service, repository, dan schem
 - [Frame dan upload slots](#8-frame-dan-upload-slots)
 - [Product](#9-product)
 - [Voucher](#10-voucher)
-- [Format query array](#11-format-query-array)
-- [Alur pengujian manual](#12-alur-pengujian-manual-di-postman)
-- [Batasan implementasi](#13-batasan-implementasi-yang-memengaruhi-integrasi)
+- [Payment (desktop)](#11-payment-desktop)
+- [Format query array](#12-format-query-array)
+- [Alur pengujian manual](#13-alur-pengujian-manual-di-postman)
+- [Batasan implementasi](#14-batasan-implementasi-yang-memengaruhi-integrasi)
 
 ## 1. Konfigurasi dan aturan umum
 
@@ -28,7 +29,8 @@ Dokumentasi REST API berdasarkan controller, DTO, service, repository, dan schem
 | Body biasa                         | `application/json`                                                 |
 | Upload tenant/frame                | `multipart/form-data`                                              |
 | Autentikasi                        | `Authorization: Bearer <encryptedToken>` untuk endpoint non-public |
-| Identitas perangkat saat instalasi | Header `X-DEVICE-ID`; tidak menggantikan Bearer token              |
+| Masa berlaku token                 | User token (login) 1 jam; device token (install) tanpa expired     |
+| Identitas perangkat                | Header `X-DEVICE-ID`; wajib saat install dan bersama device token  |
 
 Path pada dokumentasi ditulis relatif terhadap base URL. Contoh: `GET /frame` berarti `GET http://localhost:3001/api/v1/frame`.
 
@@ -129,7 +131,7 @@ Di luar `NODE_ENV=production`, respons `500` dapat memuat `detail` dan `code`. E
 | ------ | ---------------------- | --------------------- | ------ | ---------------------------------------- | --------------------------------------------------------- |
 | GET    | `/test`                | Public                | 200    | Test endpoint accessed successfully      | String                                                    |
 | GET    | `/private`             | Token                 | 200    | Protected endpoint accessed successfully | String                                                    |
-| POST   | `/install`             | Token + `X-DEVICE-ID` | 201    | Desktop Installation successfully        | `{ products, frames, vouchers }`; lihat batasan instalasi |
+| POST   | `/desk/install`        | Token + `X-DEVICE-ID` | 201    | Desktop Installation successfully        | `{ products, frames, vouchers, encryptedToken }`          |
 | POST   | `/tenant`              | Public                | 201    | Tenant created successfully              | QueryResult insert                                        |
 | POST   | `/auth/register`       | Public                | 201    | User registered successfully             | `{ user }`                                                |
 | POST   | `/auth/login`          | Public                | 201    | Login successful                         | `{ user, encryptedToken }`                                |
@@ -151,8 +153,13 @@ Di luar `NODE_ENV=production`, respons `500` dapat memuat `detail` dan `code`. E
 | POST   | `/voucher`             | Token                 | 201    | Voucher created successfully             | Tidak ada                                                 |
 | GET    | `/voucher`             | Token                 | 200    | Vouchers retrieved successfully          | `{ items, meta }` voucher                                 |
 | PATCH  | `/voucher/:id/status`  | Token                 | 200    | Voucher status updated successfully      | Tidak ada                                                 |
+| POST   | `/payment`             | Device token          | 201    | Payment request processed                | Payment (lihat [Payment](#11-payment-desktop))            |
+| GET    | `/payment/:id/status`  | Device token          | 200    | Test get status                          | Payment                                                   |
+| POST   | `/payment/webhook`     | Public (Midtrans)     | 200    | Webhook successfully                     | `{ received: true }`                                      |
 
-`PUT /voucher/:id` **belum tersedia**. Adanya `UpdateVoucherDto` tidak berarti endpoint tersebut aktif. Controller `session` dan `transaction` belum memiliki method HTTP, sehingga belum ada endpoint session, pembayaran, atau webhook Midtrans. Belum ada endpoint refresh token, logout, redeem voucher, hapus resource, atau GET catalogue/sync. `/location/options` sudah diganti menjadi `/location/dropdown`; tidak ada alias untuk path lama. Tidak ada endpoint `/booth/dropdown` atau `/booth/options`; gunakan `GET /booth` dengan filter location.
+`Device token` berarti device token hasil `/desk/install` beserta header `X-DEVICE-ID` yang sama dengan saat install.
+
+`PUT /voucher/:id` **belum tersedia**. Adanya `UpdateVoucherDto` tidak berarti endpoint tersebut aktif. Belum ada endpoint session, pembatalan payment, refresh token, logout, redeem voucher di luar payment, hapus resource, atau GET catalogue/sync. `/location/options` sudah diganti menjadi `/location/dropdown`; tidak ada alias untuk path lama. Tidak ada endpoint `/booth/dropdown` atau `/booth/options`; gunakan `GET /booth` dengan filter location.
 
 ## 3. Autentikasi dan Postman
 
@@ -284,21 +291,23 @@ Memerlukan token.
 }
 ```
 
-### Instalasi desktop — `POST /install`
+### Instalasi desktop — `POST /desk/install`
 
-Endpoint ini mengembalikan katalog aktif yang terhubung ke booth pilihan dan menulis serial number perangkat. Memerlukan Bearer token, body JSON, dan header perangkat:
+Endpoint ini mengikat perangkat ke booth pilihan, mengembalikan katalog aktif booth tersebut, dan menerbitkan **device token**. Memerlukan user token (hasil `/auth/login`), body JSON, dan header perangkat:
 
 ```http
-Authorization: Bearer <encryptedToken>
+Authorization: Bearer <encryptedToken user>
 X-DEVICE-ID: DEVICE-JKT-001
 Content-Type: application/json
 ```
 
-| Input                | Tipe     | Perilaku saat ini                                                                                                                    |
-| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Header `X-DEVICE-ID` | string   | Diteruskan sebagai `booths.serialNumber`; belum divalidasi wajib/format/panjangnya oleh backend. Kolom database maksimal 50 karakter |
-| Body `locationIds`   | string[] | Wajib, minimal 1 UUID v4, tidak boleh duplikat; **belum dipakai dalam service/repository**                                           |
-| Body `boothIds`      | string[] | Wajib, minimal 1 UUID v4, tidak boleh duplikat; digunakan untuk memilih katalog melalui tabel penghubung                             |
+| Input                | Tipe     | Perilaku                                                                                                         |
+| -------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| Header `X-DEVICE-ID` | string   | Wajib, maksimal 50 karakter; disimpan sebagai `booths.serialNumber`                                              |
+| Body `locationIds`   | string[] | Wajib, minimal 1 UUID v4, tidak boleh duplikat; setiap booth pilihan harus berada di salah satu location ini     |
+| Body `boothIds`      | string[] | Wajib, minimal 1 UUID v4, tidak boleh duplikat; harus milik tenant dari token dan aktif, jika tidak respons `404` |
+
+Tenant diambil dari user token. Booth yang sebelumnya terikat ke `X-DEVICE-ID` yang sama tetapi tidak dipilih lagi akan dilepas. Install ulang menerbitkan device token baru dan mencabut token lama.
 
 Contoh body:
 
@@ -318,7 +327,8 @@ Contoh bentuk respons `201` bila tidak ada katalog yang cocok:
   "data": {
     "products": [],
     "frames": [],
-    "vouchers": []
+    "vouchers": [],
+    "encryptedToken": "<device token>"
   }
 }
 ```
@@ -327,7 +337,12 @@ Ketiga array berisi record lengkap sesuai schema resource, tanpa pagination dan 
 
 Filter katalog yang diterapkan: resource milik tenant dari token, `isActive = true`, dan terhubung ke salah satu `boothIds`. Frame mencakup normal dan custom tanpa pengecekan periode berlaku. Voucher juga belum diperiksa tanggal berlaku atau sisa kuotanya. Karena itu, hasil instalasi bukan keputusan bahwa voucher dapat diredeem.
 
-> **Batasan penting:** query UPDATE saat ini hanya membatasi `tenantId` dan `booths.isActive = true`. Akibatnya, serial number ditulis ke **semua booth aktif milik tenant**, bukan hanya `boothIds` yang dipilih. Hindari menjalankan endpoint ini pada data operasional sampai kondisi UPDATE diperbaiki.
+#### Device token
+
+- Dipakai desktop untuk endpoint yang ditandai `@DeviceOnly()`, selalu bersama header `X-DEVICE-ID` yang sama dengan saat install.
+- Tidak expired. Token dianggap aktif selama booth masih aktif, `serialNumber`-nya sama, dan `device_token_id` di booth sama dengan `jti` token.
+- Pencabutan: set `booths.device_token_id` menjadi `NULL`, nonaktifkan booth, atau install ulang.
+- Device token ditolak (`403`) di endpoint user/CMS. User token juga ditolak di endpoint `@DeviceOnly()`.
 
 Selain itu, backend belum memverifikasi bahwa setiap booth pilihan ada, aktif, milik tenant, atau berada di `locationIds` yang dikirim. Array katalog kosong tidak menghasilkan `404` dan tidak mencegah UPDATE serial number. Pengambilan katalog dan UPDATE belum dibungkus satu transaction. Header perangkat tidak menghasilkan token perangkat dan tidak menggantikan autentikasi Bearer. Message sukses di atas mengikuti string controller persis, termasuk kapitalisasinya.
 
@@ -814,7 +829,185 @@ Memerlukan token. Body JSON `{ "isActive": true }` atau `{ "isActive": false }`.
 
 Respons: `200`, message `Voucher status updated successfully`, tanpa `data`. Voucher tidak ditemukan pada tenant menghasilkan `404 Voucher not found`. Aktivasi hanya mengubah flag dan audit; tidak mengecek kuota atau periode berlaku, tidak meredeem voucher, dan tidak mengubah `usedCount`.
 
-## 11. Format query array
+## 11. Payment (desktop)
+
+Pembayaran QRIS melalui Midtrans Core API. `POST /payment` dan `GET /payment/:id/status` dipanggil aplikasi desktop dengan device token; `POST /payment/webhook` dipanggil Midtrans. Tidak memakai WebSocket: desktop melakukan polling ke endpoint status.
+
+```http
+Authorization: Bearer <device token>
+X-DEVICE-ID: DEVICE-JKT-001
+```
+
+Tenant dan booth selalu diambil dari device token, bukan dari body.
+
+### Status payment
+
+| `paymentStatus` | Arti                                                                  | Final? |
+| --------------- | --------------------------------------------------------------------- | ------ |
+| `PENDING`       | Menunggu pembayaran. Normalnya `qrString` terisi                      | Tidak  |
+| `PAID`          | Sudah dibayar (Midtrans `settlement`), atau total Rp0 karena voucher  | Ya     |
+| `EXPIRED`       | QR kedaluwarsa (Midtrans `expire`). Kuota voucher dikembalikan        | Ya     |
+| `FAILED`        | Charge ditolak, atau Midtrans `cancel`/`deny`. Kuota voucher dikembalikan | Ya     |
+
+Status hanya berpindah dari `PENDING` ke salah satu status final; update bersyarat `WHERE payment_status = 'PENDING'` membuat webhook dan polling yang datang bersamaan tidak saling menimpa, dan kuota voucher tidak dikembalikan dua kali. `PENDING` tidak pernah diubah menjadi `EXPIRED` hanya berdasarkan `expiresAt` lokal; status final selalu berasal dari jawaban Midtrans.
+
+### Bentuk data payment
+
+`POST /payment` dan `GET /payment/:id/status` mengembalikan bentuk `data` yang sama:
+
+```json
+{
+  "message": "Payment request processed",
+  "statusCode": 201,
+  "data": {
+    "id": "3f0a6d1e-6c1f-4a8e-9b0a-1f2e3d4c5b6a",
+    "midtransOrderId": "8b7c6d5e-4f3a-4b2c-9d1e-0f9e8d7c6b5a",
+    "productId": "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+    "frameId": "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a",
+    "voucherId": null,
+    "subtotal": "28000.00",
+    "discountAmount": "0.00",
+    "totalAmount": "28000.00",
+    "paymentStatus": "PENDING",
+    "qrString": "https://api.sandbox.midtrans.com/v2/qris/<transaction_id>/qr-code",
+    "expiresAt": "2026-11-13T07:35:07.000Z"
+  }
+}
+```
+
+| Field                                      | Keterangan                                                                                                      |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `id`                                       | ID payment. Simpan di desktop untuk polling `GET /payment/:id/status`                                           |
+| `midtransOrderId`                          | `order_id` di Midtrans. Dibuat sekali per payment dan tidak pernah diganti                                      |
+| `subtotal`, `discountAmount`, `totalAmount` | String desimal (`numeric(12, 2)`). Diskon = `floor(subtotal × discountPercent / 100)`                         |
+| `qrString`                                 | **URL gambar QR** dari Midtrans (`actions[generate-qr-code].url`), tampilkan dengan `<img src>`. `null` untuk payment Rp0 |
+| `expiresAt`                                | Batas waktu QR dari `expiry_time` Midtrans (WIB dikonversi ke UTC). Hanya untuk countdown; `null` untuk payment Rp0 |
+
+Saat ini charge QRIS memakai `custom_expiry` **5 menit**.
+
+### Buat payment — `POST /payment`
+
+Header tambahan:
+
+```http
+Idempotency-Key: 6f1c2a9e-1b7d-4c3e-8a5f-2d9e0b4c7a11
+Content-Type: application/json
+```
+
+| Input                    | Tipe   | Validasi / perilaku                                                                          |
+| ------------------------ | ------ | -------------------------------------------------------------------------------------------- |
+| Header `Idempotency-Key` | string | Wajib, UUID. Satu key = satu payment. Dibuat desktop sebelum request pertama                 |
+| Body `productId`         | string | UUID v4. Produk aktif milik tenant dan terhubung ke booth token                              |
+| Body `frameId`           | string | UUID v4. Frame aktif milik tenant dan terhubung ke booth token (periode berlaku belum dicek) |
+| Body `voucherId`         | string | Opsional, UUID v4. Voucher aktif, dalam periode berlaku, kuota tersisa, terhubung ke booth   |
+| Body `boothId`           | string | Opsional, UUID v4. Tidak dipakai untuk lookup; hanya dibandingkan saat replay                |
+
+```json
+{
+  "productId": "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+  "frameId": "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a",
+  "voucherId": "4f5a6b7c-8d9e-4f0a-9b1c-2d3e4f5a6b7c"
+}
+```
+
+Harga diambil dari database, bukan dari body. Payment dan pemakaian kuota voucher (`usedCount + 1`) disimpan dalam satu transaction **sebelum** charge dikirim ke Midtrans.
+
+**Request pertama (key belum pernah dipakai):**
+
+1. Validasi product, frame, dan voucher untuk booth token.
+2. Simpan payment `PENDING` dan pakai kuota voucher.
+3. Jika `totalAmount = 0` (voucher 100%): payment langsung `PAID`, tanpa Midtrans, `qrString` dan `expiresAt` `null`.
+4. Jika berbayar: kirim charge QRIS ke Midtrans dengan `midtransOrderId`.
+
+| Jawaban charge Midtrans         | Tindakan backend                                           | Hasil ke desktop             |
+| ------------------------------- | ---------------------------------------------------------- | ---------------------------- |
+| `201`                           | Simpan `qrString` dan `expiresAt`                          | `201`, `PENDING` + QR        |
+| `406` (order_id sudah dipakai)  | Tidak mengubah apa pun                                     | `503`, retry dengan key sama |
+| `4xx` lain (kecuali `429`)      | `FAILED`, kuota voucher dikembalikan                       | `201`, `FAILED`              |
+| `5xx`, `429`, timeout, jaringan | Tidak mengubah apa pun                                     | `503`, retry dengan key sama |
+
+**Retry (key sudah pernah dipakai di booth yang sama):**
+
+Body harus sama persis dengan request pertama (`productId`, `frameId`, `voucherId`, dan `boothId` bila dikirim), jika berbeda `409 Idempotency-Key was already used with different data`. Request retry tidak membuat payment atau tagihan baru, tetapi melanjutkan payment yang ada:
+
+| Kondisi payment di database          | Tindakan backend                                                                                                                         |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Sudah final, sudah ada QR, atau Rp0  | Dikembalikan apa adanya                                                                                                                  |
+| `PENDING` tanpa QR                   | Cek status ke Midtrans:                                                                                                                  |
+| ↳ Midtrans `404` (transaksi tidak ada) | Charge ulang dengan `midtransOrderId` yang sama (Midtrans menolak `order_id` duplikat, sehingga tidak ada tagihan ganda)              |
+| ↳ `settlement` / `expire` / `cancel` / `deny` | Status disamakan (`PAID` / `EXPIRED` / `FAILED`)                                                                              |
+| ↳ `pending`                          | QR diambil dari jawaban status Midtrans dan disimpan                                                                                      |
+| ↳ Error / timeout / jawaban tanpa `transaction_status` | Tidak mengubah apa pun                                                                                                 |
+
+Setelah request pertama maupun retry, jika hasilnya masih `PENDING` tanpa QR, backend membalas **`503 Payment QR is not ready yet; retry with the same Idempotency-Key`**. Hasil lain dikembalikan dengan status `201`, termasuk `PAID`, `EXPIRED`, dan `FAILED`. Periksa `data.paymentStatus`, bukan hanya status HTTP.
+
+Error:
+
+| Status | Message                                                     | Penyebab                                                        |
+| ------ | ----------------------------------------------------------- | --------------------------------------------------------------- |
+| 400    | `Idempotency-Key must be a valid UUID`                      | Header tidak ada / bukan UUID                                   |
+| 400    | Array pesan validasi                                        | Body tidak sesuai DTO                                           |
+| 404    | `Product is not available at this booth`                    | Product tidak aktif / bukan milik tenant / tidak di booth       |
+| 404    | `Frame is not available at this booth`                      | Frame tidak aktif / bukan milik tenant / tidak di booth         |
+| 404    | `Voucher is not available, expired, or out of quota`        | Voucher tidak bisa dipakai                                      |
+| 409    | `Voucher is no longer available`                            | Kuota habis di antara validasi dan penyimpanan                  |
+| 409    | `Idempotency-Key was already used with different data`      | Key dipakai ulang dengan body berbeda                           |
+| 502    | `Payment gateway returned inconsistent transaction data`    | `order_id`/nominal dari Midtrans tidak cocok (retry); perlu cek manual |
+| 503    | `Payment QR is not ready yet; retry with the same Idempotency-Key` | QR belum tersedia; retry dengan key dan body yang sama   |
+
+### Status payment — `GET /payment/:id/status`
+
+Dipanggil desktop setiap 3–5 detik selama layar QR tampil. `:id` adalah `data.id` dari `POST /payment`, divalidasi `ParseUUIDPipe`.
+
+1. Cari payment berdasarkan `id`, tenant, **dan booth** token. Tidak ditemukan → `404 Payment not found`.
+2. Jika sudah final atau Rp0: langsung dikembalikan dari database, tanpa memanggil Midtrans.
+3. Jika `PENDING`: cek status ke Midtrans. `settlement` → `PAID`, `expire` → `EXPIRED`, `cancel`/`deny` → `FAILED`, `pending` → tidak berubah.
+4. Midtrans `404`, error, timeout, atau data tidak cocok hanya dicatat di log; payment tetap dikembalikan dengan status database.
+5. Payment dibaca ulang dari database lalu dikembalikan.
+
+Endpoint ini **tidak pernah membuat charge**. Jika polling menemukan `PENDING` tanpa `qrString`, desktop perlu mengirim ulang `POST /payment` dengan key dan body yang sama.
+
+Respons selalu `200` dengan `data` payment (bentuk sama seperti di atas). Error: `400` jika `:id` bukan UUID, `404 Payment not found`.
+
+### Webhook Midtrans — `POST /payment/webhook`
+
+Public, dipanggil Midtrans (atur Payment Notification URL di dashboard Midtrans ke `<base URL publik>/payment/webhook`). Body: notifikasi Midtrans dengan minimal `order_id`, `status_code`, `gross_amount`, `signature_key`, dan `transaction_status`.
+
+1. Validasi field wajib, lalu verifikasi `signature_key = sha512(order_id + status_code + gross_amount + server_key)`.
+2. Cari payment berdasarkan `order_id`.
+3. Isi notifikasi tidak dipercaya langsung: backend memanggil Status API Midtrans dan mencocokkan `order_id` serta nominal.
+4. `settlement` → `PAID`, `expire` → `EXPIRED`, `cancel`/`deny` → `FAILED`, `pending` → tidak berubah.
+
+Sukses: `200`, `data: { "received": true }`. Selain `200`, Midtrans akan mengirim ulang notifikasi.
+
+| Status | Message                                    | Penyebab                                                    |
+| ------ | ------------------------------------------ | ----------------------------------------------------------- |
+| 400    | `Invalid notification payload`             | Field wajib tidak ada / bukan string                        |
+| 400    | `Payment amount mismatch`                  | Nominal Midtrans ≠ `totalAmount`                            |
+| 401    | `Invalid Midtrans signature`               | Signature tidak valid                                       |
+| 404    | `Payment not found`                        | `order_id` tidak dikenal                                    |
+| 503    | `Unable to verify payment status`          | Status API Midtrans tidak bisa dihubungi                    |
+| 503    | `Incomplete or inconsistent payment status` | `order_id`/`gross_amount` dari Status API tidak lengkap/cocok |
+| 503    | `Payment status is not handled yet`        | `transaction_status` lain, misalnya `refund`                |
+
+### Panduan integrasi desktop
+
+1. **Sebelum** `POST /payment`, buat `Idempotency-Key` (UUID) dan simpan bersama body ke penyimpanan lokal Electron.
+2. Kirim `POST /payment`. Jika `503`, ulangi dengan key **dan body yang sama** memakai backoff (misalnya 1s → 2s → 4s → 8s, maksimal beberapa kali).
+3. Simpan `data.id`. Tampilkan QR dari `qrString` dan countdown dari `expiresAt`.
+4. Polling `GET /payment/{id}/status` setiap 3–5 detik. Jadwalkan panggilan berikutnya **setelah** respons sebelumnya selesai; perlambat interval jika error.
+5. Berhenti polling saat `paymentStatus` final atau layar QR ditutup:
+   - `PAID` → lanjut ke sesi foto.
+   - `EXPIRED`/`FAILED` → kembali ke pilih paket. Pembayaran berikutnya wajib memakai **Idempotency-Key baru**; key lama selalu mengembalikan payment lama.
+6. Saat countdown habis, tampilkan "Memeriksa pembayaran…" dan teruskan polling sampai backend mengembalikan status final; pelanggan bisa membayar di detik terakhir.
+7. Setelah restart aplikasi: jika ada `id` tersimpan, panggil `GET /payment/{id}/status`; jika hanya ada key + body (crash sebelum menerima respons), kirim ulang `POST /payment` dengan key dan body yang sama.
+8. Hapus key, body, dan `id` dari penyimpanan lokal setelah status final ditangani.
+
+### Pengujian di sandbox
+
+QR sandbox tidak bisa dibayar dengan aplikasi e-wallet sungguhan. Salin `qrString` (URL gambar QR) ke QRIS simulator Midtrans sandbox, lalu bayar dari simulator. Status berubah menjadi `PAID` melalui webhook atau polling berikutnya. Webhook lokal membutuhkan URL publik (misalnya tunnel) yang didaftarkan di dashboard Midtrans sandbox.
+
+## 12. Format query array
 
 Filter array booth, product, dan voucher menerima satu nilai, nilai dipisah koma, atau query key berulang. Contoh setara untuk produk:
 
@@ -837,7 +1030,7 @@ Perbedaan format input:
 
 POST product, voucher, dan install belum memasang interceptor multipart: gunakan body JSON untuk ketiganya. Jangan mengirim `boothIds` sebagai string JSON pada body JSON tersebut. Gunakan UUID aktual dari database dengan kapitalisasi konsisten; pengecekan duplikat saat ini membandingkan string secara langsung.
 
-## 12. Alur pengujian manual di Postman
+## 13. Alur pengujian manual di Postman
 
 1. Siapkan tenant dan UUID-nya. `POST /tenant` tersedia, tetapi belum mengembalikan record/ID tenant; ambil UUID dari database/proses provisioning.
 2. Register dengan tenant tersebut, lalu login dan simpan `encryptedToken`.
@@ -848,15 +1041,16 @@ POST product, voucher, dan install belum memasang interceptor multipart: gunakan
 7. Buat product/voucher dengan `boothIds` berupa array JSON. Cek `data.items` dan `data.meta` melalui GET masing-masing; hanya daftar product yang menambahkan `validAtBooths`.
 8. Gunakan PATCH status pada product, frame, atau voucher untuk mengaktifkan/menonaktifkan. Voucher baru masih nonaktif sampai diaktifkan.
 9. Uji alur filter location → booth → product melalui GET. Kirim hanya parameter yang didukung DTO; reset `page` menjadi `1` ketika filter diterapkan.
-10. Uji `/install` hanya pada tenant/data uji setelah memahami batasan UPDATE seluruh booth aktif. Jangan menganggap `201` sebagai bukti perangkat hanya terikat ke booth pilihan.
+10. Uji `/desk/install` dengan user token, lalu simpan `encryptedToken` dari respons sebagai device token di desktop.
+11. Dengan device token + `X-DEVICE-ID`, kirim `POST /payment` dengan header `Idempotency-Key` (UUID baru). Kirim ulang request yang sama untuk memastikan payment yang sama dikembalikan.
+12. Bayar melalui QRIS simulator Midtrans sandbox memakai `qrString`, lalu panggil `GET /payment/:id/status` sampai `paymentStatus` menjadi `PAID`.
 
-## 13. Batasan implementasi yang memengaruhi integrasi
+## 14. Batasan implementasi yang memengaruhi integrasi
 
 Dokumentasi ini mencatat perilaku kode yang ada, termasuk bagian yang perlu diperbaiki:
 
 | Bagian               | Kondisi saat ini dan dampaknya                                                                                                                                                                                                                                                                              |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Instalasi perangkat  | UPDATE serial number belum dibatasi ke `boothIds`; semua booth aktif tenant terpengaruh. `locationIds` hanya divalidasi bentuknya, header perangkat belum divalidasi, dan kepemilikan/status booth pilihan belum diperiksa                                                                                  |
 | Custom frame         | `@ValidateNested` pada array string `boothIds` menyebabkan `400` untuk input UUID yang benar. Pemeriksaan lokal mengonfirmasi error tersebut                                                                                                                                                                |
 | Harga product        | Schema memakai `numeric(12, 2)` dengan representasi runtime string, sedangkan tipe TypeScript diberi `number` dan DTO masih membatasi input integer                                                                                                                                                         |
 | Error status frame   | Frame tidak ditemukan masih dilaporkan sebagai `Voucher not found`; message sukses sudah menyebut frame                                                                                                                                                                                                     |
@@ -864,6 +1058,13 @@ Dokumentasi ini mencatat perilaku kode yang ada, termasuk bagian yang perlu dipe
 | Catalogue/sync       | Create product/frame/voucher memperbarui kolom sync terkait dalam transaction yang sama. PATCH status menjalankan UPDATE resource dan upsert catalogue melalui `Promise.all` tanpa satu transaction, sehingga keduanya dapat berhasil/gagal terpisah. Belum ada endpoint yang mengekspos timestamp tersebut |
 | Upload R2            | Upload mendahului validasi booth/insert database dan belum ada penghapusan file otomatis bila langkah database gagal                                                                                                                                                                                        |
 | Logging daftar booth | Service masih membaca `booth.length`, padahal repository mengembalikan `{ items, meta }`; log count tidak sesuai dan pemanggilan ini bermasalah pada pemeriksaan tipe TypeScript                                                                                                                            |
+| Payment: QR          | `qrString` berisi URL gambar dari `actions` Midtrans. Jika jawaban Midtrans tidak menyertakan `actions` (kemungkinan pada Status API saat recovery), `qrString` tersimpan `null` sehingga retry terus mendapat `503` sampai QR kedaluwarsa                                                               |
+| Payment: payment macet | Belum ada endpoint pembatalan maupun job rekonsiliasi. Payment `PENDING` yang ditinggalkan saat Midtrans tidak bisa dihubungi tetap menahan kuota voucher sampai webhook Midtrans datang                                                                                                                  |
+| Payment: idempotency | Kolom `idempotency_key` unik global, sedangkan lookup per tenant + booth. Key yang sama dari booth lain menghasilkan `500`, bukan replay atau `409`                                                                                                                                                        |
+| Payment: webhook     | Webhook belum memakai logika status bersama dengan polling/retry: `settlement` untuk payment yang sudah `FAILED`/`EXPIRED` tidak dicatat sebagai kasus review manual, dan nominal tidak cocok menghasilkan `400`                                                                                          |
+| Payment: endpoint status | Message sukses masih `Test get status`, controller masih mencetak `console.log`, belum ada `Cache-Control: no-store` maupun rate limit per device                                                                                                                                                    |
+| Payment: konfigurasi | Server key selalu dibaca dari `SERVER_KEY_SANDBOX`, termasuk ketika `MIDTRANS_IS_PRODUCTION=true`                                                                                                                                                                                                          |
+| Payment → session    | Status `PAID` belum membuat session; alur order/session pada `docs/payment-session-recovery-flow.md` belum diimplementasikan                                                                                                                                                                               |
 
 Endpoint yang menerima daftar booth untuk create memeriksa keberadaan dan tenant saat membaca, tetapi tidak mengunci baris booth. Pemetaan error foreign key saat insert masih umum seperti dijelaskan per modul. Validasi UUID tidak menggantikan validasi keberadaan atau kepemilikan resource.
 

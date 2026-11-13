@@ -5,4 +5,5 @@ export * from './booth.schema.js';
 export * from './voucher.schema.js';
 export * from './product.schema.js';
 export * from './frame.schema.js';
-export * from './catalogue.schema.js'
+export * from './catalogue.schema.js';
+export * from './payment.schema.js';

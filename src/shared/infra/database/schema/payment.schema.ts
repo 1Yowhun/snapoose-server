@@ -1,56 +1,77 @@
 import { sql } from 'drizzle-orm';
 import {
   pgTable,
-  uuid, // <-- Gunakan uuid
-  integer,
+  uuid,
   varchar,
   numeric,
   boolean,
   timestamp,
+  pgSequence,
+  text,
 } from 'drizzle-orm/pg-core';
 import { tenants } from './tenant.schema.js';
+import { vouchers } from './voucher.schema.js';
+import { frames } from './frame.schema.js';
+import { booths } from './booth.schema.js';
+import { products } from './product.schema.js';
 
-export const transactions = pgTable('transaction', {
+export const PaymentCodeSeq = pgSequence('payment_code_seq', {
+  startWith: 1,
+  increment: 1,
+});
+
+export const payments = pgTable('payment', {
   // Primary Key menggunakan UUID secara otomatis
   id: uuid('id').primaryKey().defaultRandom(),
-
-  // Identifiers
   code: varchar('code', { length: 100 })
     .notNull()
-    .default(sql`'TRX-' || nextval('product_code_seq')`),
-
-  // Foreign Keys
+    .default(sql`'TRX-' || nextval('payment_code_seq')`),
   tenantId: uuid('tenant_id')
     .notNull()
-    .references(() => tenants.id),
-  sessionId: integer('session_id'),
-  voucherId: integer('voucher_id'),
-
-  transactionType: varchar('transaction_type', { length: 50 }),
-  merchantNameSnapshot: varchar('merchant_name_snapshot', { length: 255 }),
-
-  grossAmount: numeric('gross_amount', { precision: 12, scale: 2 }),
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  frameId: uuid('frame_id')
+    .notNull()
+    .references(() => frames.id, {
+      onDelete: 'cascade',
+    }),
+  voucherId: uuid('voucher_id').references(() => vouchers.id, {
+    onDelete: 'cascade',
+  }),
+  boothId: uuid('booth_id')
+    .notNull()
+    .references(() => booths.id, {
+      onDelete: 'cascade',
+    }),
+  product_id: uuid('product_id')
+    .notNull()
+    .references(() => products.id, {
+      onDelete: 'cascade',
+    }),
+  midtransOrderId: varchar('midtrans_order_id', { length: 50 })
+    .notNull()
+    .unique(),
+  subtotal: numeric('sub_total', { precision: 12, scale: 2 }),
   discountAmount: numeric('discount_amount', { precision: 12, scale: 2 }),
-  netAmount: numeric('net_amount', { precision: 12, scale: 2 }),
-
-  // Status & Gateway Info
-  gatewayStatus: varchar('gateway_status', { length: 50 }),
-  status: varchar('status', { length: 50 }),
-  midtransOrderId: varchar('midtrans_order_id', { length: 255 }),
-
-  // Flags & Webhook Safety
-  isOfflineCreated: boolean('is_offline_created').default(false),
-  idempotencyKey: varchar('idempotency_key', { length: 255 }),
-
-  // Timestamps
-  paidAt: timestamp('paid_at'),
-  settlementAt: timestamp('settlement_at'),
-  syncedAt: timestamp('synced_at'),
+  totalAmount: numeric('total_amount', { precision: 12, scale: 2 }),
+  paymentStatus: varchar('payment_status', { length: 50 }),
+  currency: varchar('currency', { length: 5 }).default('IDR'),
+  idempotencyKey: text('idempotency_key').unique(),
+  qrString: text('qr_string'),
+  settlementAt: timestamp('settlement_at', {
+    precision: 0,
+    withTimezone: true,
+  }),
+  expiresAt: timestamp('expires_at', {
+    precision: 0,
+    withTimezone: true,
+  }),
   createdAt: timestamp('created_at', { precision: 0, withTimezone: true })
     .notNull()
     .defaultNow(),
 });
 
+export type Payment = typeof payments.$inferSelect;
+export type NewPayment = typeof payments.$inferInsert;
 
 // export type PaymentStatus =
 //   | "UNPAID"
