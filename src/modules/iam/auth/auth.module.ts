@@ -12,7 +12,7 @@ import { AuthRepository } from './auth.repository.js';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '2h' },
+        signOptions: { algorithm: 'HS256' },
       }),
     }),
   ],
