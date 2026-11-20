@@ -20,7 +20,7 @@ import { CreateTenantDto } from '../../dto/tenant.dto.js';
 export class TenantController {
   constructor(private readonly tenantService: TenantService) {}
 
-  @Public()
+
   @Post()
   @UseInterceptors(FileInterceptor('logo'))
   @ResponseMessage('Tenant created successfully')
@@ -29,6 +29,6 @@ export class TenantController {
     @Body() dto: CreateTenantDto,
     @UploadedFile(FrameFileValidationPipe()) file: Express.Multer.File,
   ) {
-    await this.tenantService.postTenant(file, dto);
+    return await this.tenantService.postTenant(file, dto);
   }
 }

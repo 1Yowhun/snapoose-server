@@ -20,10 +20,10 @@ export const tenants = pgTable('tenants', {
     .notNull()
     .unique()
     .default(sql`'TNT-' || nextval('tenant_code_seq')`),
-  name: varchar('name', { length: 255 }).notNull(),
-  brandName: varchar('brand_name', { length: 255 }).notNull(),
+  name: varchar('name', { length: 50 }).notNull().unique(),
+  brandName: varchar('brand_name', { length: 50 }).notNull().unique(),
   about: text('about').notNull(),
-  logoUrl: text('logo_url').notNull(),
+  logoUrl: text('logo_url'),
   isActive: boolean('is_active').default(true).notNull(),
   createdAt: timestamp('created_at', { precision: 0, withTimezone: true })
     .notNull()

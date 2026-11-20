@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import { AppLogger } from '../../common/logger.service.js';
 import { CreateTenantDto } from '../../dto/tenant.dto.js';
 import { randomUUID } from 'crypto';
@@ -10,24 +14,48 @@ export class TenantService {
     private readonly tenantRepository: TenantRepository,
     private readonly logger: AppLogger,
   ) {}
+
+  MIME_EXT: Record<string, string> = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/webp': 'webp',
+  };
   async postTenant(file: Express.Multer.File, data: CreateTenantDto) {
-    const key = `tenants/${randomUUID()}-${file.originalname}`;
+    const ext = this.MIME_EXT[file.mimetype];
+    if (!ext) throw new BadRequestException('Unsupported logo type');
 
-    const tenantlogo = await this.tenantRepository.insertPhotoLogo(
-      key,
-      file.buffer,
-      file.mimetype,
-    );
+    const id = randomUUID();
+    const key = `tenants/${id}/logo.${ext}`;
+    await this.tenantRepository.uploadLogo(key, file.buffer, file.mimetype);
 
-    const url = tenantlogo.url;
+    try {
+      const [tenant] = await this.tenantRepository.insertTenant({
+        ...data,
+        id,
+        logoUrl: this.tenantRepository.publicUrl(key),
+      });
 
-    const payload = {
-      ...data,
-      logoUrl: url,
-    };
+      this.logger.log(`Tenant created: ${tenant.id}`, TenantService.name);
+      return tenant;
+    } catch (err: any) {
+      await this.tenantRepository
+        .deleteObject(key)
+        .catch((e) =>
+          this.logger.error(
+            `Failed to delete orphan logo ${key}`,
+            String(e),
+            TenantService.name,
+          ),
+        );
 
-    const tenant = await this.tenantRepository.insertTenant(payload);
-    this.logger.log(`Tenant created`, TenantService.name);
-    return tenant;
+      const pgErr = err?.cause ?? err;
+      if (pgErr?.code === '23505') {
+        const field = pgErr.constraint?.includes('brand_name')
+          ? 'Brand name'
+          : 'Name';
+        throw new ConflictException(`${field} already exists`);
+      }
+      throw err;
+    }
   }
 }
