@@ -1,6 +1,6 @@
 # Snapoose Pro — API Documentation
 
-Dokumentasi REST API berdasarkan controller, DTO, service, repository, dan schema saat ini. Diperbarui pada **13 November 2026**. Data modul di bawah disimpan di PostgreSQL melalui Drizzle; file gambar diunggah ke Cloudflare R2. Perilaku yang belum selesai ditandai secara eksplisit; contoh sukses bukan bukti pengujian terhadap server atau database yang berjalan.
+Dokumentasi REST API berdasarkan controller, DTO, service, repository, dan schema saat ini. Diperbarui pada **26 November 2026**. Data modul di bawah disimpan di PostgreSQL melalui Drizzle; file gambar diunggah ke Cloudflare R2. Perilaku yang belum selesai ditandai secara eksplisit; contoh sukses bukan bukti pengujian terhadap server atau database yang berjalan.
 
 ### Daftar isi
 
@@ -15,9 +15,11 @@ Dokumentasi REST API berdasarkan controller, DTO, service, repository, dan schem
 - [Product](#9-product)
 - [Voucher](#10-voucher)
 - [Payment (desktop)](#11-payment-desktop)
-- [Format query array](#12-format-query-array)
-- [Alur pengujian manual](#13-alur-pengujian-manual-di-postman)
-- [Batasan implementasi](#14-batasan-implementasi-yang-memengaruhi-integrasi)
+- [Session (desktop)](#12-session-desktop)
+- [Halaman download (publik)](#13-halaman-download-publik)
+- [Format query array](#14-format-query-array)
+- [Alur pengujian manual](#15-alur-pengujian-manual-di-postman)
+- [Batasan implementasi](#16-batasan-implementasi-yang-memengaruhi-integrasi)
 
 ## 1. Konfigurasi dan aturan umum
 
@@ -27,7 +29,8 @@ Dokumentasi REST API berdasarkan controller, DTO, service, repository, dan schem
 | Port                               | Environment variable `PORT`; default `3001`                        |
 | Prefix                             | `/api/v1`                                                          |
 | Body biasa                         | `application/json`                                                 |
-| Upload tenant/frame                | `multipart/form-data`                                              |
+| Upload tenant/frame/session        | `multipart/form-data`                                              |
+| URL halaman download               | Environment variable `DOWNLOAD_PAGE_URL`, **harus diakhiri `/`**   |
 | Autentikasi                        | `Authorization: Bearer <encryptedToken>` untuk endpoint non-public |
 | Masa berlaku token                 | User token (login) 1 jam; device token (install) tanpa expired     |
 | Identitas perangkat                | Header `X-DEVICE-ID`; wajib saat install dan bersama device token  |
@@ -156,10 +159,14 @@ Di luar `NODE_ENV=production`, respons `500` dapat memuat `detail` dan `code`. E
 | POST   | `/payment`             | Device token          | 201    | Payment request processed                | Payment (lihat [Payment](#11-payment-desktop))            |
 | GET    | `/payment/:id/status`  | Device token          | 200    | Test get status                          | Payment                                                   |
 | POST   | `/payment/webhook`     | Public (Midtrans)     | 200    | Webhook successfully                     | `{ received: true }`                                      |
+| POST   | `/session/:id`         | Device token          | 201    | Session Photo has been processed         | Session (lihat [Session](#12-session-desktop)); `:id` = ID payment |
+| PATCH  | `/session/:id/complete` | Device token         | 200    | Session Photo has completed, please wait for qr photo | `{ url }` halaman download; `:id` = ID session |
+| GET    | `/public/sessions/:token` | Public (token di URL) | 200 | Session photos retrieved successfully    | `{ expiresAt, media[] }` (lihat [Halaman download](#13-halaman-download-publik)) |
+| GET    | `/public/sessions/:token/media/:mediaId/download` | Public (token di URL) | 302 | Tidak ada (redirect)            | Redirect ke presigned URL R2; tidak dibungkus format respons |
 
 `Device token` berarti device token hasil `/desk/install` beserta header `X-DEVICE-ID` yang sama dengan saat install.
 
-`PUT /voucher/:id` **belum tersedia**. Adanya `UpdateVoucherDto` tidak berarti endpoint tersebut aktif. Belum ada endpoint session, pembatalan payment, refresh token, logout, redeem voucher di luar payment, hapus resource, atau GET catalogue/sync. `/location/options` sudah diganti menjadi `/location/dropdown`; tidak ada alias untuk path lama. Tidak ada endpoint `/booth/dropdown` atau `/booth/options`; gunakan `GET /booth` dengan filter location.
+`PUT /voucher/:id` **belum tersedia**. Adanya `UpdateVoucherDto` tidak berarti endpoint tersebut aktif. Belum ada endpoint untuk membatalkan atau menutup session yang tertinggal di status `STARTED`, pembatalan payment, refresh token, logout, redeem voucher di luar payment, hapus resource, atau GET catalogue/sync. `/location/options` sudah diganti menjadi `/location/dropdown`; tidak ada alias untuk path lama. Tidak ada endpoint `/booth/dropdown` atau `/booth/options`; gunakan `GET /booth` dengan filter location.
 
 ## 3. Autentikasi dan Postman
 
@@ -997,7 +1004,7 @@ Sukses: `200`, `data: { "received": true }`. Selain `200`, Midtrans akan mengiri
 3. Simpan `data.id`. Tampilkan QR dari `qrString` dan countdown dari `expiresAt`.
 4. Polling `GET /payment/{id}/status` setiap 3–5 detik. Jadwalkan panggilan berikutnya **setelah** respons sebelumnya selesai; perlambat interval jika error.
 5. Berhenti polling saat `paymentStatus` final atau layar QR ditutup:
-   - `PAID` → lanjut ke sesi foto.
+   - `PAID` → lanjut ke sesi foto: kirim `POST /session/{paymentId}` (lihat [Session](#12-session-desktop)). Pembuatan session tidak otomatis; desktop yang memanggilnya.
    - `EXPIRED`/`FAILED` → kembali ke pilih paket. Pembayaran berikutnya wajib memakai **Idempotency-Key baru**; key lama selalu mengembalikan payment lama.
 6. Saat countdown habis, tampilkan "Memeriksa pembayaran…" dan teruskan polling sampai backend mengembalikan status final; pelanggan bisa membayar di detik terakhir.
 7. Setelah restart aplikasi: jika ada `id` tersimpan, panggil `GET /payment/{id}/status`; jika hanya ada key + body (crash sebelum menerima respons), kirim ulang `POST /payment` dengan key dan body yang sama.
@@ -1007,7 +1014,252 @@ Sukses: `200`, `data: { "received": true }`. Selain `200`, Midtrans akan mengiri
 
 QR sandbox tidak bisa dibayar dengan aplikasi e-wallet sungguhan. Salin `qrString` (URL gambar QR) ke QRIS simulator Midtrans sandbox, lalu bayar dari simulator. Status berubah menjadi `PAID` melalui webhook atau polling berikutnya. Webhook lokal membutuhkan URL publik (misalnya tunnel) yang didaftarkan di dashboard Midtrans sandbox.
 
-## 12. Format query array
+## 12. Session (desktop)
+
+Session adalah satu pelaksanaan sesi foto untuk satu payment. Dibuat setelah payment `PAID`, lalu diselesaikan ketika pelanggan menekan tombol selesai/unduh QR. Kedua endpoint dipanggil aplikasi desktop dengan device token; tenant dan booth selalu diambil dari token, bukan dari body.
+
+```http
+Authorization: Bearer <device token>
+X-DEVICE-ID: DEVICE-JKT-001
+```
+
+```text
+POST /payment  →  PAID  →  POST /session/{paymentId}  →  (foto)  →  PATCH /session/{sessionId}/complete  →  { url }
+```
+
+Perhatikan perbedaan ID: `POST /session/:id` memakai **ID payment**, sedangkan `PATCH /session/:id/complete` memakai **ID session** (`data.id` dari respons POST).
+
+### Status session
+
+| `status`   | Arti                                                                 | Final? |
+| ---------- | -------------------------------------------------------------------- | ------ |
+| `STARTED`  | Session dibuat, foto belum diselesaikan                              | Tidak  |
+| `FINISHED` | File sudah diunggah, media tercatat, dan token download dibuat       | Ya     |
+
+Hanya dua nilai ini yang diizinkan oleh constraint database `session_status_valid`. Perpindahan `STARTED` → `FINISHED` memakai update bersyarat `WHERE status = 'STARTED'`, sehingga dua request `complete` yang datang bersamaan hanya berhasil satu kali.
+
+### Mulai session — `POST /session/:id`
+
+`:id` adalah ID payment (`data.id` dari `POST /payment`), divalidasi `ParseUUIDPipe`.
+
+```http
+Idempotency-Key: 0b7f8c1e-5d2a-4e63-9a41-7c8d9e0f1a2b
+Content-Type: application/json
+```
+
+| Input                    | Tipe    | Validasi / perilaku                                                                                |
+| ------------------------ | ------- | -------------------------------------------------------------------------------------------------- |
+| Header `Idempotency-Key` | string  | Wajib, UUID. Dibuat desktop sebelum request pertama dan dipakai ulang pada setiap retry            |
+| Body `consentPublish`    | boolean | `true` atau `false`. `true` = file disimpan tanpa batas waktu; `false` = link berlaku 7 hari       |
+
+```json
+{ "consentPublish": false }
+```
+
+Langkah backend:
+
+1. Cari session berdasarkan `Idempotency-Key` (dibatasi tenant dan booth token). Jika ada dan `paymentId`-nya sama, session itu dikembalikan; jika `paymentId` berbeda, `409`.
+2. Cari session berdasarkan payment. Jika payment sudah punya session (misalnya key hilang lalu desktop mengirim key baru), session yang ada dikembalikan.
+3. Ambil payment untuk tenant dan booth token. Tidak ditemukan → `404`. Status database bukan `PAID` → `409`.
+4. Cek ke Midtrans (`GET /v2/{orderId}/status`). Jika `transaction_status` bukan `settlement` → `409`.
+5. Simpan session `STARTED`. Kolom snapshot diisi dari data saat ini:
+
+   | Kolom session             | Sumber                                           |
+   | ------------------------- | ------------------------------------------------ |
+   | `productNameSnapshot`     | `products.name`                                  |
+   | `productPriceSnapshot`    | `payments.totalAmount` (total setelah diskon)    |
+   | `productDiscountSnapshot` | `payments.discountAmount`                        |
+   | `layoutMappingJson`       | `frames.slots` (disalin; perubahan frame tidak memengaruhi session yang sudah ada) |
+   | `expiresAt`               | `null` jika `consentPublish = true`; selain itu waktu pembuatan + 7 hari |
+
+6. Jika insert bentrok unique constraint (`23505`; dua request dengan key yang sama masuk bersamaan), backend mengambil session pemenang dan mengembalikannya.
+
+Satu payment hanya bisa punya satu session (unique `paymentId`).
+
+Respons `201` berisi seluruh baris session:
+
+```json
+{
+  "message": "Session Photo has been processed",
+  "statusCode": 201,
+  "data": {
+    "id": "0194a8e2-7b3c-7d41-8f12-3a4b5c6d7e8f",
+    "code": "SES-1",
+    "tenantId": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+    "boothId": "f9aef8b8-0e38-4c7a-9d83-d55ff2940ee7",
+    "frameId": "2d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a",
+    "productId": "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+    "voucherId": null,
+    "paymentId": "3f0a6d1e-6c1f-4a8e-9b0a-1f2e3d4c5b6a",
+    "status": "STARTED",
+    "consentPublish": false,
+    "productNameSnapshot": "Photo Session",
+    "productPriceSnapshot": "28000.00",
+    "productDiscountSnapshot": "0.00",
+    "layoutMappingJson": [{ "x": 0, "y": 0, "width": 500, "height": 500 }],
+    "idempotencyKey": "0b7f8c1e-5d2a-4e63-9a41-7c8d9e0f1a2b",
+    "downloadTokenHash": null,
+    "createdAt": "2026-11-26T03:00:00.000Z",
+    "expiresAt": "2026-12-03T03:00:00.000Z",
+    "completedAt": null
+  }
+}
+```
+
+Replay (key sama, atau payment yang sama) juga dijawab `201` dengan session yang sudah ada, apa pun statusnya. Periksa `data.status`.
+
+| Status | Message                                                  | Penyebab                                                   |
+| ------ | -------------------------------------------------------- | ---------------------------------------------------------- |
+| 400    | `Idempotency-key must be a valid UUID`                   | Header tidak ada / bukan UUID                              |
+| 400    | Pesan dari `ParseUUIDPipe`                               | `:id` bukan UUID                                           |
+| 404    | `Payment not found`                                      | Payment tidak ada, atau bukan milik tenant/booth token     |
+| 409    | `Payment is not paid`                                    | Status payment di database bukan `PAID`                    |
+| 409    | `Payment was not paid`                                   | Midtrans belum melaporkan `settlement`                     |
+| 409    | `Idempotency-Key was already used with different data`   | Key dipakai ulang untuk payment lain                       |
+
+### Selesaikan session — `PATCH /session/:id/complete`
+
+`multipart/form-data`. `:id` adalah **ID session**. Dipanggil ketika pelanggan menekan tombol selesai/unduh QR. Body teks dan header `Idempotency-Key` tidak dipakai endpoint ini.
+
+| Field form-data | Jumlah        | Tipe file yang diterima            | Batas ukuran | Keterangan                                                              |
+| --------------- | ------------- | ---------------------------------- | ------------ | ----------------------------------------------------------------------- |
+| `photos`        | 3–10 file     | `image/jpeg`, `image/png`          | 10 MB / file | Ulangi key `photos` untuk tiap foto; **bukan** `photos[]` atau `photos[0]` |
+| `framed`        | 1 file        | `image/jpeg`, `image/png`          | 10 MB        | Wajib. Foto dengan frame                                                |
+| `gif`           | 1 file        | `image/gif`, `video/mp4`           | 15 MB        | Wajib. Sementara boleh berupa MP4                                       |
+| `livePhoto`     | 1 file        | Tidak divalidasi                   | 25 MB (batas Multer) | Dibutuhkan oleh kode; lihat [batasan](#16-batasan-implementasi-yang-memengaruhi-integrasi) |
+
+Batas Multer: maksimal 13 file per request dan 25 MB per file. Field file lain ditolak.
+
+Langkah backend:
+
+1. Cari session untuk tenant dan booth token. Tidak ditemukan → `404`; sudah `FINISHED` → `409`.
+2. Tentukan prefix R2: `public` jika `consentPublish = true`, selain itu `private`.
+3. Unggah semua file ke R2 secara paralel dengan key yang dibuat server (tabel di bawah). Nama file dari client tidak dipakai.
+4. Dalam satu transaction: ubah session menjadi `FINISHED` (isi `completedAt` dan `downloadTokenHash`), lalu insert satu baris `media` per file. Jika update tidak mengenai baris (request lain sudah menyelesaikan), `409` dan seluruh transaction dibatalkan.
+5. Jika langkah 3 atau 4 gagal selain karena `409`, file yang sudah terunggah dihapus dari R2. Kegagalan penghapusan hanya dicatat di log. Pada `409`, file tidak dihapus karena key-nya sama dengan milik request yang menang.
+6. Respons berisi URL halaman download.
+
+Key R2 dan urutan tampil (`position`):
+
+| `position`     | `kind`       | Key                                                   |
+| -------------- | ------------ | ----------------------------------------------------- |
+| 1              | `FRAMED`     | `{prefix}/tenants/{tenantId}/{sessionId}/framed.{ext}`      |
+| 2 … N+1        | `PHOTO`      | `{prefix}/tenants/{tenantId}/{sessionId}/photo-{n}.{ext}`   |
+| berikutnya     | `GIF`        | `{prefix}/tenants/{tenantId}/{sessionId}/gif-combine.{ext}` |
+| terakhir       | `LIVE_VIDEO` | `{prefix}/tenants/{tenantId}/{sessionId}/live-photo.{ext}`  |
+
+`{ext}` berasal dari mimetype: `image/jpeg` → `jpg`, `image/png` → `png`, `image/gif` → `gif`, `video/mp4` → `mp4`.
+
+```json
+{
+  "message": "Session Photo has completed, please wait for qr photo",
+  "statusCode": 200,
+  "data": {
+    "url": "https://photos.example.com/s/Qm9uZ2Fp...43-karakter"
+  }
+}
+```
+
+- `data.url` adalah isi QR yang ditampilkan ke pelanggan: `{DOWNLOAD_PAGE_URL}s/{token}`. Karena kode menyambung `s/` langsung, `DOWNLOAD_PAGE_URL` harus diakhiri `/`.
+- Token (43 karakter base64url) **hanya muncul di respons ini**. Database hanya menyimpan hash SHA-256-nya (`downloadTokenHash`), sehingga token tidak dapat diambil ulang. Jika respons hilang, belum ada endpoint untuk membuat QR baru.
+
+| Status | Message                                                       | Penyebab                                                          |
+| ------ | ------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 400    | `Photos must contain 3 to 10 files`                           | Jumlah `photos` di luar 3–10                                      |
+| 400    | `framed is required`, `gif is required`, atau `framed, gif are required` | Field wajib tidak ada                                  |
+| 400    | `{field} has an unsupported file type`                        | Mimetype tidak diizinkan untuk field tersebut                     |
+| 400    | `{field} must not exceed {n}MB`                               | File melebihi batas per field                                     |
+| 400/413 | Error dari Multer                                            | Field file tidak dikenal, lebih dari 13 file, atau file lebih dari 25 MB (perilaku bawaan Nest; belum diuji) |
+| 404    | `Session not found`                                           | Session tidak ada, atau bukan milik tenant/booth token            |
+| 409    | `Session already finished`                                    | Session sudah `FINISHED`, atau request lain menyelesaikannya lebih dulu |
+
+### Retensi file
+
+| `consentPublish` | Prefix R2  | `expiresAt` | Perilaku                                                                                                  |
+| ---------------- | ---------- | ----------- | --------------------------------------------------------------------------------------------------------- |
+| `false`          | `private/` | waktu pembuatan session + 7 hari | Halaman download berhenti melayani (404) setelah `expiresAt`. File di R2 harus dihapus oleh **lifecycle rule bucket** pada prefix `private/` (disarankan 8 hari sebagai margin). Kode backend tidak menghapus file kedaluwarsa |
+| `true`           | `public/`  | `null`      | Tidak kedaluwarsa. Tidak ada lifecycle rule untuk prefix `public/`                                       |
+
+`expiresAt` dihitung saat session **dibuat**, bukan saat diselesaikan. Lifecycle rule R2 dikonfigurasi manual di dashboard atau API R2, bukan oleh aplikasi.
+
+### Panduan integrasi desktop
+
+1. Setelah payment `PAID`, buat `Idempotency-Key` baru (UUID) untuk session dan simpan di penyimpanan lokal bersama `paymentId`.
+2. Kirim `POST /session/{paymentId}` dengan body `consentPublish`. Jika timeout atau jaringan putus, ulangi dengan key yang **sama**; jangan membuat key baru pada retry.
+3. Simpan `data.id` (ID session). Jika key hilang (misalnya penyimpanan lokal terhapus), kirim ulang dengan key baru: backend mengembalikan session yang sudah ada untuk payment tersebut.
+4. Setelah sesi foto selesai dan pelanggan menekan tombol selesai, kirim `PATCH /session/{sessionId}/complete` dengan form-data: ulangi `photos` untuk tiap foto, lalu `framed`, `gif`, dan `livePhoto`.
+5. Tampilkan QR dari `data.url`. Simpan URL itu selama QR masih tampil; token tidak bisa dipulihkan dari server.
+6. Jika `PATCH` dijawab `409 Session already finished` setelah respons sebelumnya hilang, session sudah selesai di server tetapi URL tidak dapat diambil lagi (lihat batasan).
+7. Hapus key dan data lokal setelah QR berhasil ditampilkan.
+
+## 13. Halaman download (publik)
+
+Dua endpoint tanpa login untuk aplikasi web yang dibuka pelanggan setelah memindai QR. Satu-satunya kredensial adalah token di URL (`{DOWNLOAD_PAGE_URL}s/{token}`). Endpoint ini berada di prefix `/public` dan memakai `@Public()`.
+
+Sebuah token dianggap valid jika:
+
+- formatnya tepat 43 karakter `A-Z a-z 0-9 - _`,
+- hash SHA-256-nya cocok dengan `downloadTokenHash` sebuah session,
+- `status = 'FINISHED'`, dan
+- `expiresAt` bernilai `null` atau belum terlewat.
+
+Selain itu, kedua endpoint menjawab `404`. Kasus token salah, session belum selesai, dan session kedaluwarsa sengaja tidak dibedakan.
+
+### Daftar media — `GET /public/sessions/:token`
+
+Header respons: `Cache-Control: no-store`. Respons dibungkus format sukses biasa:
+
+```json
+{
+  "message": "Session photos retrieved successfully",
+  "statusCode": 200,
+  "data": {
+    "expiresAt": "2026-12-03T03:00:00.000Z",
+    "media": [
+      {
+        "id": "0194a8e3-1a2b-7c3d-8e4f-5a6b7c8d9e0f",
+        "kind": "FRAMED",
+        "contentType": "image/jpeg",
+        "filename": "framed.jpg",
+        "sizeBytes": 482113,
+        "position": 1,
+        "previewUrl": "private/tenants/9a8b7c6d-.../0194a8e2-.../framed.jpg"
+      }
+    ]
+  }
+}
+```
+
+| Field         | Keterangan                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------- |
+| `expiresAt`   | ISO 8601, atau `null` jika pelanggan menyetujui publikasi (tidak kedaluwarsa)                           |
+| `media`       | Terurut menurut `position`                                                                              |
+| `kind`        | `FRAMED`, `PHOTO`, `GIF`, atau `LIVE_VIDEO`                                                             |
+| `contentType` | Pilih `<img>` atau `<video>` dari field ini, bukan dari `kind`: GIF sementara berupa `video/mp4`        |
+| `filename`    | Bagian terakhir key R2, misalnya `photo-1.jpg`                                                          |
+| `previewUrl`  | **Saat ini berisi key R2 apa adanya, bukan URL yang bisa dibuka browser** (lihat [batasan](#16-batasan-implementasi-yang-memengaruhi-integrasi)) |
+
+### Unduh satu media — `GET /public/sessions/:token/media/:mediaId/download`
+
+`:mediaId` adalah `id` dari daftar media (UUID, divalidasi `ParseUUIDPipe`). Backend memastikan media tersebut milik session pemilik token, lalu membalas **`302`** ke presigned URL R2 yang berlaku **5 menit** dengan `Content-Disposition: attachment; filename="..."`, sehingga browser langsung mengunduh file. Respons ini **tidak dibungkus** format sukses karena dikirim langsung lewat `@Res()`. Header `Cache-Control: no-store`.
+
+| Status | Message                                       | Penyebab                                           |
+| ------ | --------------------------------------------- | -------------------------------------------------- |
+| 400    | Pesan dari `ParseUUIDPipe`                    | `:mediaId` bukan UUID                              |
+| 404    | `Link tidak valid atau sudah kedaluwarsa`     | Token tidak valid / session kedaluwarsa            |
+| 404    | `Media not found`                             | Media tidak ada, atau bukan milik session tersebut |
+
+### Panduan untuk frontend
+
+1. Rute halaman: `/s/{token}`. Ambil `token` dari path lalu panggil `GET /public/sessions/{token}`.
+2. Baca isi dari `data.media`; respons dibungkus `{ message, statusCode, data }`.
+3. Tampilkan `video/*` dengan `<video autoplay loop muted playsinline>` dan tipe lain dengan `<img>`.
+4. Tombol unduh cukup berupa link biasa (`<a href>`) ke `/public/sessions/{token}/media/{id}/download`. Jangan memakai `fetch` agar tidak perlu CORS ke R2.
+5. Tangani `404` dengan pesan "link tidak valid atau kedaluwarsa". Tidak ada cara membedakan penyebabnya.
+6. Hosting SPA perlu mengembalikan `index.html` untuk path `/s/*`. Tambahkan `Referrer-Policy: no-referrer` agar token di URL tidak bocor lewat header Referer.
+7. `enableCors` di backend belum membatasi origin; pembatasan ke domain frontend perlu diatur sebelum production.
+
+## 14. Format query array
 
 Filter array booth, product, dan voucher menerima satu nilai, nilai dipisah koma, atau query key berulang. Contoh setara untuk produk:
 
@@ -1030,7 +1282,7 @@ Perbedaan format input:
 
 POST product, voucher, dan install belum memasang interceptor multipart: gunakan body JSON untuk ketiganya. Jangan mengirim `boothIds` sebagai string JSON pada body JSON tersebut. Gunakan UUID aktual dari database dengan kapitalisasi konsisten; pengecekan duplikat saat ini membandingkan string secara langsung.
 
-## 13. Alur pengujian manual di Postman
+## 15. Alur pengujian manual di Postman
 
 1. Siapkan tenant dan UUID-nya. `POST /tenant` tersedia, tetapi belum mengembalikan record/ID tenant; ambil UUID dari database/proses provisioning.
 2. Register dengan tenant tersebut, lalu login dan simpan `encryptedToken`.
@@ -1044,8 +1296,12 @@ POST product, voucher, dan install belum memasang interceptor multipart: gunakan
 10. Uji `/desk/install` dengan user token, lalu simpan `encryptedToken` dari respons sebagai device token di desktop.
 11. Dengan device token + `X-DEVICE-ID`, kirim `POST /payment` dengan header `Idempotency-Key` (UUID baru). Kirim ulang request yang sama untuk memastikan payment yang sama dikembalikan.
 12. Bayar melalui QRIS simulator Midtrans sandbox memakai `qrString`, lalu panggil `GET /payment/:id/status` sampai `paymentStatus` menjadi `PAID`.
+13. Kirim `POST /session/{paymentId}` dengan header `Idempotency-Key` (UUID baru) dan body `{ "consentPublish": false }`. Kirim ulang request yang sama untuk memastikan session yang sama dikembalikan. Simpan `data.id`.
+14. Kirim `PATCH /session/{sessionId}/complete` dengan body `form-data`: `photos` (ulangi key 3 kali atau lebih), `framed`, `gif` (boleh MP4), dan `livePhoto`. Simpan `data.url`; token di dalamnya hanya muncul sekali. Request kedua harus dijawab `409 Session already finished`.
+15. Ambil token dari `data.url` (bagian setelah `/s/`), lalu panggil `GET /public/sessions/{token}` tanpa header Authorization. Pastikan `data.media` berisi semua file.
+16. Buka `GET /public/sessions/{token}/media/{mediaId}/download` dengan `mediaId` dari langkah sebelumnya. Respons harus `302` dengan header `Location` berisi presigned URL R2; matikan opsi "follow redirects" di Postman agar header tersebut terlihat.
 
-## 14. Batasan implementasi yang memengaruhi integrasi
+## 16. Batasan implementasi yang memengaruhi integrasi
 
 Dokumentasi ini mencatat perilaku kode yang ada, termasuk bagian yang perlu diperbaiki:
 
@@ -1056,7 +1312,7 @@ Dokumentasi ini mencatat perilaku kode yang ada, termasuk bagian yang perlu dipe
 | Error status frame   | Frame tidak ditemukan masih dilaporkan sebagai `Voucher not found`; message sukses sudah menyebut frame                                                                                                                                                                                                     |
 | Respons relasi booth | Hanya GET product yang menyertakan `validAtBooths`; GET frame/voucher dan katalog install belum menyertakan detail relasi                                                                                                                                                                                   |
 | Catalogue/sync       | Create product/frame/voucher memperbarui kolom sync terkait dalam transaction yang sama. PATCH status menjalankan UPDATE resource dan upsert catalogue melalui `Promise.all` tanpa satu transaction, sehingga keduanya dapat berhasil/gagal terpisah. Belum ada endpoint yang mengekspos timestamp tersebut |
-| Upload R2            | Upload mendahului validasi booth/insert database dan belum ada penghapusan file otomatis bila langkah database gagal                                                                                                                                                                                        |
+| Upload R2 (tenant/frame) | Upload mendahului validasi booth/insert database. Tenant sudah menghapus file bila insert gagal; frame belum. Upload session dibahas pada baris Session di bawah                                                                                                                                         |
 | Logging daftar booth | Service masih membaca `booth.length`, padahal repository mengembalikan `{ items, meta }`; log count tidak sesuai dan pemanggilan ini bermasalah pada pemeriksaan tipe TypeScript                                                                                                                            |
 | Payment: QR          | `qrString` berisi URL gambar dari `actions` Midtrans. Jika jawaban Midtrans tidak menyertakan `actions` (kemungkinan pada Status API saat recovery), `qrString` tersimpan `null` sehingga retry terus mendapat `503` sampai QR kedaluwarsa                                                               |
 | Payment: payment macet | Belum ada endpoint pembatalan maupun job rekonsiliasi. Payment `PENDING` yang ditinggalkan saat Midtrans tidak bisa dihubungi tetap menahan kuota voucher sampai webhook Midtrans datang                                                                                                                  |
@@ -1064,8 +1320,18 @@ Dokumentasi ini mencatat perilaku kode yang ada, termasuk bagian yang perlu dipe
 | Payment: webhook     | Webhook belum memakai logika status bersama dengan polling/retry: `settlement` untuk payment yang sudah `FAILED`/`EXPIRED` tidak dicatat sebagai kasus review manual, dan nominal tidak cocok menghasilkan `400`                                                                                          |
 | Payment: endpoint status | Message sukses masih `Test get status`, controller masih mencetak `console.log`, belum ada `Cache-Control: no-store` maupun rate limit per device                                                                                                                                                    |
 | Payment: konfigurasi | Server key selalu dibaca dari `SERVER_KEY_SANDBOX`, termasuk ketika `MIDTRANS_IS_PRODUCTION=true`                                                                                                                                                                                                          |
-| Payment → session    | Status `PAID` belum membuat session; alur order/session pada `docs/payment-session-recovery-flow.md` belum diimplementasikan                                                                                                                                                                               |
+| Payment → session    | Status `PAID` tidak otomatis membuat session; desktop harus memanggil `POST /session/:paymentId`. Alur order/session pada `docs/payment-session-recovery-flow.md` (tabel order, rekonsiliasi, recovery) belum diimplementasikan                                                                            |
+| Session: validasi body | Controller mengimpor `SessionDto` sebagai `type`, sehingga class-nya hilang saat runtime dan `ValidationPipe` tidak memvalidasi body `POST /session/:id`. `consentPublish` yang tidak dikirim atau bukan boolean tidak ditolak; nilai yang hilang tersimpan sebagai `null` dan diperlakukan seperti `false` (`private/`) |
+| Session: `livePhoto` | Pipe tidak mewajibkan `livePhoto` dan tidak memvalidasi tipe/ukurannya (aturan masih dikomentari), tetapi `updateSession` langsung membaca `files.livePhoto[0]`. Tanpa field itu `PATCH /session/:id/complete` gagal dengan `500` setelah validasi lolos, sebelum ada file yang diunggah; field ini praktis wajib                |
+| Session: `DOWNLOAD_PAGE_URL` | URL QR disusun `${DOWNLOAD_PAGE_URL}s/${token}` tanpa menambahkan `/`. Jika variabel tidak diakhiri `/`, hasilnya menjadi `https://host` + `s/token` tanpa pemisah                                                                                                                                  |
+| Session: `previewUrl` | `StorageService.getUrl(key)` saat ini mengembalikan key R2 apa adanya, bukan URL. Akibatnya `previewUrl` di `GET /public/sessions/:token` tidak dapat dibuka browser. Presigned URL pratinjau (`previewUrl()` di `StorageService`) tidak dipakai oleh endpoint ini                                         |
+| Session: respons POST | `POST /session/:id` mengembalikan seluruh baris session, termasuk `idempotencyKey` dan, untuk replay session yang sudah selesai, `downloadTokenHash`. Hash tidak dapat dipakai sebagai token, tetapi tidak perlu diekspos                                                                                    |
+| Session: QR hilang   | Token hanya ada di respons `PATCH .../complete` dan database hanya menyimpan hash-nya. Belum ada endpoint untuk membuat ulang QR; jika respons hilang, `PATCH` kedua dijawab `409` tanpa URL                                                                                                                |
+| Session: payment Rp0 | `POST /session/:id` selalu memanggil Status API Midtrans dengan `midtransOrderId`. Payment Rp0 (voucher 100%) tidak pernah dikirim ke Midtrans, sehingga pembuatan session untuk payment seperti itu belum ditangani dan kemungkinan gagal (belum diuji)                                                       |
+| Session: session tertinggal | Belum ada endpoint atau job untuk menutup/membatalkan session yang berhenti di `STARTED`. Satu payment tetap hanya bisa punya satu session                                                                                                                                                      |
+| Session: retensi R2  | Penghapusan file `private/` setelah 7 hari bergantung pada lifecycle rule bucket yang dikonfigurasi manual. Kode tidak menghapus file kedaluwarsa, dan `expiresAt` dihitung dari pembuatan session, bukan dari penyelesaian                                                                                  |
+| Session: endpoint publik | Belum ada rate limit. `logMiddleware` mencatat `req.path` pada level debug, sehingga token pada `/public/sessions/:token` ikut tercatat di log                                                                                                                                                         |
 
 Endpoint yang menerima daftar booth untuk create memeriksa keberadaan dan tenant saat membaca, tetapi tidak mengunci baris booth. Pemetaan error foreign key saat insert masih umum seperti dijelaskan per modul. Validasi UUID tidak menggantikan validasi keberadaan atau kepemilikan resource.
 
-Pembaruan dokumentasi ini tidak mengubah source backend atau migration. Verifikasi dilakukan melalui pembacaan source, pemeriksaan route/DTO, dan pemeriksaan lokal transform/validasi serta pemetaan numeric; belum mencakup request ke database, R2, atau endpoint instalasi yang berjalan.
+Pembaruan dokumentasi ini tidak mengubah source backend atau migration. Verifikasi dilakukan melalui pembacaan source, pemeriksaan route/DTO, dan pemeriksaan lokal transform/validasi serta pemetaan numeric; belum mencakup request ke database, R2, atau endpoint instalasi yang berjalan. Bagian Session dan Halaman download juga ditulis dari pembacaan source (controller, service, repository, schema, migration, dan pipe) serta pemeriksaan tipe `tsc --noEmit`; alur upload ke R2, redirect unduhan, dan pembuatan token belum diuji terhadap server yang berjalan.
