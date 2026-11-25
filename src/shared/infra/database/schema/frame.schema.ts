@@ -18,7 +18,7 @@ export const frameCodeSeq = pgSequence('frame_code_seq', {
   startWith: 1,
   increment: 1,
 });
-type SlotPoint = { x: number; y: number; width: number; height: number };
+export type SlotPoint = { x: number; y: number; width: number; height: number };
 
 export const frames = pgTable('frames', {
   id: uuid('id').primaryKey().defaultRandom(),
