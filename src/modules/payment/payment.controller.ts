@@ -23,7 +23,7 @@ import type { Request } from 'express';
 
 @Controller('payment')
 export class PaymentController {
-  constructor(private readonly PaymentService: PaymentService) {}
+  constructor(private readonly paymentService: PaymentService) {}
 
   @DeviceOnly()
   @Post()
@@ -34,7 +34,7 @@ export class PaymentController {
     @Body() dto: PaymentDto,
     @CurrentUser() device: RequestDevice,
   ) {
-    return await this.PaymentService.createPayment(device, idempotencyKey, dto);
+    return await this.paymentService.createPayment(device, idempotencyKey, dto);
   }
 
   @DeviceOnly()
@@ -46,7 +46,7 @@ export class PaymentController {
     @CurrentUser() device: RequestDevice,
   ) {
     console.log(device);
-    return await this.PaymentService.getStatusMidtrans(
+    return await this.paymentService.getStatusMidtrans(
       id,
       device
     );
@@ -70,7 +70,7 @@ export class PaymentController {
       notificationPresent: notification != null,
     });
 
-    await this.PaymentService.handleNotification(notification);
+    await this.paymentService.handleNotification(notification);
     return { received: true };
   }
 }
