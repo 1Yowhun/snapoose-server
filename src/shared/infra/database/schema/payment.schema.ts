@@ -42,7 +42,7 @@ export const payments = pgTable('payment', {
     .references(() => booths.id, {
       onDelete: 'cascade',
     }),
-  product_id: uuid('product_id')
+  productId: uuid('product_id')
     .notNull()
     .references(() => products.id, {
       onDelete: 'cascade',

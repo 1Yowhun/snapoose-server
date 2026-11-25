@@ -1,5 +1,9 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { R2_CLIENT } from '../../shared/infra/cloudflare/r2.factory.js';
 import { ConfigService } from '@nestjs/config';
 import { DRIZZLE } from '../../shared/infra/database/drizzle.factory.js';
@@ -7,7 +11,6 @@ import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import {
   tenants,
   NewTenant,
-  Tenant,
 } from '../../shared/infra/database/schema/tenant.schema.js';
 
 @Injectable()
@@ -19,27 +22,38 @@ export class TenantRepository {
   ) {}
 
   async insertTenant(data: NewTenant) {
-    return await this.db.insert(tenants).values(data);
+    return await this.db
+      .insert(tenants)
+      .values(data)
+      .returning({ id: tenants.id, name: tenants.brandName });
   }
 
-  async insertPhotoLogo(
-    key: string,
-    buffer: Buffer,
-    contentType: string,
-  ): Promise<{ key: string; etag?: string; url: string }> {
-    const command = new PutObjectCommand({
-      Bucket: this.configService.get('R2_BUCKET_NAME'),
-      Key: key,
-      Body: buffer,
-      ContentType: contentType,
-    });
+  async uploadLogo(key: string, buffer: Buffer, contentType: string) {
+    await this.r2.send(
+      new PutObjectCommand({
+        Bucket: this.configService.getOrThrow<string>('R2_BUCKET_NAME'),
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+        CacheControl: 'public, max-age=31536000, immutable',
+      }),
+    );
+  }
 
-    const response = await this.r2.send(command);
+  async deleteObject(key: string) {
+    await this.r2.send(
+      new DeleteObjectCommand({
+        Bucket: this.configService.getOrThrow<string>('R2_BUCKET_NAME'),
+        Key: key,
+      }),
+    );
+  }
 
-    return {
-      key,
-      etag: response.ETag,
-      url: `${this.configService.get('R2_PUBLIC_URL').trim()}${key}`,
-    };
+  publicUrl(key: string): string {
+    const base = this.configService
+      .getOrThrow<string>('R2_PUBLIC_URL')
+      .trim()
+      .replace(/\/+$/, '');
+    return `${base}/${key}`;
   }
 }

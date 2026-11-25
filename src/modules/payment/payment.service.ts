@@ -71,7 +71,7 @@ export class PaymentService {
           midtransOrderId: randomUUID(),
           tenantId,
           boothId,
-          product_id: product.id,
+          productId: product.id,
           frameId: frame.id,
           voucherId: voucher?.id ?? null,
           idempotencyKey,
@@ -222,7 +222,7 @@ export class PaymentService {
 
   private async replay(existing: Payment, dto: PaymentDto) {
     const same =
-      existing.product_id === dto.productId &&
+      existing.productId === dto.productId &&
       existing.frameId === dto.frameId &&
       existing.voucherId === (dto.voucherId ?? null) &&
       (!dto.boothId || existing.boothId === dto.boothId);

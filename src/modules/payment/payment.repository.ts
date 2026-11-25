@@ -24,7 +24,7 @@ import {
 const paymentResponse = {
   id: payments.id,
   midtransOrderId: payments.midtransOrderId,
-  productId: payments.product_id,
+  productId: payments.productId,
   frameId: payments.frameId,
   voucherId: payments.voucherId,
   subtotal: payments.subtotal,
@@ -48,7 +48,7 @@ export type PaymentResponse = Pick<
   | 'qrString'
   | 'expiresAt'
 > & {
-  productId: Payment['product_id'];
+  productId: Payment['productId'];
 };
 
 // Catalogue dianggap tersedia jika sekarang berada di dalam periode berlakunya

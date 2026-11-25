@@ -7,3 +7,5 @@ export * from './product.schema.js';
 export * from './frame.schema.js';
 export * from './catalogue.schema.js';
 export * from './payment.schema.js';
+export * from './media.schema.js';
+export * from './session.schema.js';
